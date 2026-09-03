@@ -1,0 +1,5 @@
+pytest>=8,<9
+
+# Add runtime dependencies here, pinning versions once the project is stable.
+# Example:
+# pandas==2.2.3

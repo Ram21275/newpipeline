@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Test and build output
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Jupyter and OS files
+.ipynb_checkpoints/
+.DS_Store
+
+# Local secrets and data
+.env
+.env.*
+data/
+outputs/
