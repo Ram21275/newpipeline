@@ -39,24 +39,68 @@ PYTHONPATH=projects/logit_evidence_routing/src \
 
 ## Kaggle
 
-Create a notebook, enable Internet, and run:
+The repository is private. Create a fine-grained GitHub token scoped to this
+repository with read-only **Contents** access. Save it in Kaggle under
+**Add-ons → Secrets** as `GITHUB_TOKEN`, enable it for the notebook, enable
+Internet, and run this Python cell:
 
 ```python
-!git clone --branch feat/iclr --single-branch https://github.com/Ram21275/newpipeline.git /kaggle/working/newpipeline
+import base64
+import os
+import subprocess
+from kaggle_secrets import UserSecretsClient
+
+token = UserSecretsClient().get_secret("GITHUB_TOKEN")
+credentials = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+environment = os.environ.copy()
+environment.update({
+    "GIT_CONFIG_COUNT": "1",
+    "GIT_CONFIG_KEY_0": "http.https://github.com/.extraheader",
+    "GIT_CONFIG_VALUE_0": f"AUTHORIZATION: basic {credentials}",
+})
+subprocess.run(
+    [
+        "git", "clone", "--branch", "feat/iclr", "--single-branch",
+        "https://github.com/Ram21275/newpipeline.git",
+        "/kaggle/working/newpipeline",
+    ],
+    check=True,
+    env=environment,
+)
+del token, credentials, environment
+```
+
+Then install and test the project:
+
+```python
 %cd /kaggle/working/newpipeline/projects/logit_evidence_routing
 !pip install -e .
 !python -m unittest discover -s tests -v
 !python scripts/run_synthetic_pilot.py --output /kaggle/working/lger_synthetic_smoke.json
 ```
 
-For later updates in the same Kaggle session:
+For later updates, rerun the authenticated clone cell in a fresh session. In the
+same session, authenticate a fast-forward-only pull without changing the remote:
 
 ```python
-%cd /kaggle/working/newpipeline
-!git pull --ff-only origin feat/iclr
-%cd projects/logit_evidence_routing
-!pip install -e .
+token = UserSecretsClient().get_secret("GITHUB_TOKEN")
+credentials = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+environment = os.environ.copy()
+environment.update({
+    "GIT_CONFIG_COUNT": "1",
+    "GIT_CONFIG_KEY_0": "http.https://github.com/.extraheader",
+    "GIT_CONFIG_VALUE_0": f"AUTHORIZATION: basic {credentials}",
+})
+subprocess.run(
+    ["git", "pull", "--ff-only", "origin", "feat/iclr"],
+    cwd="/kaggle/working/newpipeline",
+    check=True,
+    env=environment,
+)
+del token, credentials, environment
 ```
+
+Never print the token, commit it, or save the authenticated header in Git config.
 
 ## Next scientific milestone
 
