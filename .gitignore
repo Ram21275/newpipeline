@@ -19,5 +19,10 @@ dist/
 # Local secrets and data
 .env
 .env.*
-data/
-outputs/
+**/data/raw/
+**/cache/
+**/outputs/
+**/results/
+
+# Local codebase analysis artifacts
+graphify-out/
