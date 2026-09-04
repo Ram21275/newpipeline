@@ -64,7 +64,9 @@ Clone the public feature branch:
 
 %cd /kaggle/working/newpipeline/projects/logit_evidence_routing
 !python -m pip install -r requirements-kaggle.txt
-!python -m unittest discover -s tests -v
+!python -m pip install -e . --no-deps
+!python -c "import lger; print(lger.__file__)"
+!PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
 For an existing clone:
@@ -74,8 +76,15 @@ For an existing clone:
 !git pull --ff-only origin feat/iclr
 %cd projects/logit_evidence_routing
 !python -m pip install -r requirements-kaggle.txt
-!python -m unittest discover -s tests -v
+!python -m pip install -e . --no-deps
+!python -c "import lger; print(lger.__file__)"
+!PYTHONPATH=src python -m unittest discover -s tests -v
 ```
+
+If `unittest` reports `ModuleNotFoundError: No module named 'lger'`, the local
+package was not installed into the Python process running the tests. The
+explicit editable-install and `PYTHONPATH=src` commands above make both routes
+unambiguous; the import check should print a path ending in `src/lger/__init__.py`.
 
 ## Correct the existing Phase 01B cache
 
@@ -156,6 +165,29 @@ This writes:
 
 Stop before stage-wise representation extraction if the report says
 `STOP / INVESTIGATE`.
+
+## Moving forward after Phase 01
+
+Do not run the next large experiment until `phase1_sanity_report.md` passes.
+After it passes, proceed in this order:
+
+1. Implement and smoke-test a stage-aligned cache for selected vision layers,
+   projector output, selected LLM layers, spatial coordinates, CUB attributes,
+   visible parts, and fixed-prompt answers.
+2. Extract the existing 240-image development pilot once on Kaggle. Measure
+   storage/runtime before expanding it.
+3. Train the same linear multi-label CUB attribute probe at every stage. This is
+   the first experiment that can test where attribute information is accessible.
+4. Separately compare Vision-CLS attention, LLM attention, dense semantic
+   similarity, and valid Logit Lens scores against part annotations.
+5. Compare internal probe recoverability with fixed-prompt VLM answer accuracy.
+   This tests for a representation–utilization gap without assuming one.
+6. Write `INTERMEDIATE_FINDINGS.md`, select the strongest supported transition,
+   and only then run one matched causal removal/replacement experiment.
+
+The immediate development task after a passing report is therefore the
+stage-aligned representation-cache implementation—not another selector sweep or
+a sparse-autoencoder experiment.
 
 ## Outputs to download
 
