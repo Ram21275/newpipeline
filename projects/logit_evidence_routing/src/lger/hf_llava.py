@@ -82,18 +82,44 @@ def _module_dtype(module: nn.Module) -> torch.dtype:
 def fixed_concept_token_ids(
     tokenizer: Any, concepts: tuple[str, ...]
 ) -> tuple[int, ...]:
-    """Tokenize a fixed, image-independent concept vocabulary."""
+    """Tokenize fixed concepts as distinct, lexical vocabulary entries.
 
-    token_ids: set[int] = set()
+    LLaMA tokenizers already add the SentencePiece word-boundary marker when a
+    bare word is encoded.  Prefixing the input with a literal space can instead
+    produce a standalone ``▁`` token (29871 for LLaMA), whose probability has
+    no concept-specific meaning.  Requiring one non-special lexical token per
+    concept keeps this diagnostic unambiguous; phrases belong in a sequence-
+    level or embedding-similarity probe rather than a sum over token marginals.
+    """
+
+    token_ids: list[int] = []
+    seen: set[int] = set()
+    special_ids = {int(token_id) for token_id in tokenizer.all_special_ids}
     for raw_concept in concepts:
         concept = raw_concept.strip()
         if not concept:
             raise ValueError("fixed concepts cannot be empty")
-        encoded = tokenizer.encode(f" {concept}", add_special_tokens=False)
+        encoded = tokenizer.encode(concept, add_special_tokens=False)
         if not encoded:
             raise ValueError(f"fixed concept produced no tokens: {concept!r}")
-        token_ids.update(int(token_id) for token_id in encoded)
-    return tuple(sorted(token_ids))
+        if len(encoded) != 1:
+            raise ValueError(
+                f"fixed concept {concept!r} produced {len(encoded)} tokens; "
+                "use single-token concepts for Logit Lens token mass"
+            )
+        token_id = int(encoded[0])
+        decoded = tokenizer.decode(
+            [token_id], skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )
+        if token_id in special_ids or not decoded.strip():
+            raise ValueError(
+                f"fixed concept {concept!r} mapped to a special or whitespace-only "
+                f"token ({token_id})"
+            )
+        if token_id not in seen:
+            token_ids.append(token_id)
+            seen.add(token_id)
+    return tuple(token_ids)
 
 
 def _resolve_language_projection(model: nn.Module) -> tuple[nn.Module, nn.Module]:
@@ -198,6 +224,9 @@ class HfLlavaPatchExtractor:
         self.fixed_concepts = tuple(fixed_concepts)
         self.concept_token_ids = fixed_concept_token_ids(
             processor.tokenizer, self.fixed_concepts
+        )
+        self.concept_tokens = tuple(
+            processor.tokenizer.convert_ids_to_tokens(list(self.concept_token_ids))
         )
         self.final_norm, self.lm_head = _resolve_language_projection(model)
         for parameter in self.model.parameters():
@@ -448,6 +477,27 @@ class HfLlavaPatchExtractor:
             {method: torch.cat(parts) for method, parts in score_parts.items()},
             torch.cat(top_id_parts),
         )
+
+    def project_concept_logprob(self, patch_hidden: torch.Tensor) -> torch.Tensor:
+        """Recompute only fixed-concept token mass from cached patch states."""
+
+        if patch_hidden.ndim != 2:
+            raise ValueError("patch hidden states must have shape [patches, hidden]")
+        if not self.concept_token_ids:
+            raise RuntimeError("no fixed concepts were configured")
+        projection_device = _module_device(self.final_norm)
+        concept_ids = torch.tensor(
+            self.concept_token_ids,
+            device=projection_device,
+            dtype=torch.long,
+        )
+        parts: list[torch.Tensor] = []
+        with torch.inference_mode():
+            for chunk in patch_hidden.split(self.projection_chunk_size, dim=0):
+                logits = self.lm_head(self.final_norm(chunk.to(projection_device)))
+                parts.append(logits_to_token_mass(logits, concept_ids).cpu())
+                del logits
+        return torch.cat(parts)
 
     def decode_token_ids(self, token_ids: torch.Tensor) -> list[list[str]]:
         tokenizer = self.processor.tokenizer

@@ -1,119 +1,77 @@
-# 01B — Localization-Selector Validation
+# 01B — Localization Selector Result and Correction
 
-## Why this rerun exists
+## What this experiment measured
 
-The first pilot used unrestricted vocabulary confidence,
-`max_v p(v | h_patch)`. The referenced Prisma demonstration applies a ViT's
-ImageNet head to every patch and visualizes each patch's semantic prediction;
-it does not establish that discarding the predicted identity and ranking only
-by maximum confidence is a foreground localizer. Our decoded high-confidence
-tokens also included punctuation and tokenizer fragments, while Logit-K
-improved over Random-K only at `K=16`.
+Every selector ranks the same 576 spatial positions. The Top-K late LLM patch
+states are mean-pooled and given to the same linear species probe. Therefore the
+experiment measures the utility of a routing score over one fixed downstream
+representation; it does not compare raw representation stages.
 
-This rerun therefore retains unrestricted max-probability for a faithful
-comparison and adds an explicit fixed-concept score suitable for testing bird
-localization. The latter is an adaptation, not an exact reproduction of the
-Prisma visualization.
+## Valid pilot observations
 
-Before Phase 02, run one bounded selector benchmark that separates three
-questions:
+| Selector | K=16 accuracy | K=32 accuracy |
+|---|---:|---:|
+| Random | 40.8% | 54.4% |
+| LLM attention | 70.0% | 68.8% |
+| Vision CLS attention | **92.5%** | **95.0%** |
+| Vision attention rollout | 50.0% | 55.0% |
+| Logit max probability | 48.8% | 47.5% |
+| Logit margin | 48.3% | 52.5% |
+| Logit negative entropy | 49.6% | 53.8% |
+| All 576 patches | 66.3% | 66.3% |
 
-1. Does a score localize the bird?
-2. Do the selected original LLaVA hidden states retain class-discriminative
-   information?
-3. Is the signal complementary to decoder attention?
+Vision-CLS selected-patch centers were inside the broad bird box 73.7% at K=16
+and 80.8% at K=32, compared with 47.4% and 47.1% for random. However, its top-1
+pointing-game rate was only 37.5%, below the random estimate in this pilot. The
+ordered map and the Top-K set therefore tell different stories and both must be
+reported.
 
-This is still Phase 01. It must not be presented as a new final method.
+These values use one 20-class development pilot (160 train, 80 validation) drawn
+only from the official CUB training split. The three runs vary linear-probe
+initialization, not the sampled images.
 
-## Fixed experimental contract
+## Invalid rows
 
-- Keep LLaVA-1.5-7B, its vision tower, projector, LLM, and LM head frozen.
-- Use the same CUB manifest as the first pilot.
-- Use the same patch budgets for every Top-K selector.
-- Rank with localization scores, but represent with the same late-layer LLaVA
-  patch hidden states.
-- Mean-pool and train the same linear probe for every selector.
-- Never use an image's fine-grained ground-truth class to select its patches.
-- Use CUB bounding boxes for evaluation only, never for selection or training.
+The original `logit_concept` token IDs were `[11199, 17952, 29871]`. In the
+LLaMA tokenizer, 29871 is the standalone SentencePiece whitespace marker `▁`.
+It entered because the code manually prefixed each concept with a space before
+tokenization. Consequently:
 
-## Selector suite
+- the reported `logit_concept` results are invalid;
+- `attention_logit_fusion` is also invalid because it consumes that score;
+- other selectors and their cached features are unaffected.
 
-### Controls
+The corrected implementation encodes bare concepts, requires exactly one
+non-special lexical token per concept, records decoded token strings, and blocks
+benchmarking legacy concept caches. Multi-token attributes such as “red crown”
+must use a sequence-aware score or dense semantic similarity, not a sum of
+independent token marginals.
 
-- `random`: uniform spatial patches.
-- `global_all`: mean of all visual tokens; not a localizer, but a coverage
-  reference.
-- `llm_attention`: the original final-prompt-token decoder attention score.
-- `logit_maxprob`: the original unrestricted maximum vocabulary probability.
+## Correction run
 
-### Same-backbone localization signals
+If the original Phase 01B cache still exists, run
+`scripts/repair_phase1b_concepts.py`. It reuses cached late LLM patch states,
+loads the frozen normalization and LM head, and recomputes only
+`logit_concept`, `attention_logit_fusion`, and their derived features. It writes
+a new cache and never modifies the source in place.
 
-- `vision_cls_attention`: final-layer CLS-to-patch attention from LLaVA's frozen
-  CLIP vision tower.
-- `vision_attention_rollout`: residual-aware attention rollout through all
-  vision-tower layers.
-- `logit_margin`: top-1 minus top-2 vocabulary logit.
-- `logit_negentropy`: negative vocabulary entropy.
-- `logit_concept`: probability mass assigned to a fixed concept-token set. For
-  CUB use `bird` and `birds` for every image. This uses dataset-level object
-  knowledge, not the per-image species label, and must be reported as such.
-- `attention_logit_fusion`: a fixed equal-weight sum of per-image standardized
-  `llm_attention` and `logit_concept` scores.
+If only result CSVs remain, rerun `extract_phase1b_localizers.py` into a new
+cache. Do not copy the invalid concept/fusion numbers into a paper or report.
 
-Do not tune fusion weights after looking at validation results.
+## Phase decision
 
-## Evaluation
+The original proposal that logit-space routing should be the method is rejected
+by the valid pilot. Generic logit-confidence selectors are close to random for
+species probing, while Vision-CLS routing is much stronger. Logit Lens remains a
+semantic-readability diagnostic in the evidence-tracing study.
 
-### Downstream recognition
+Before advancing, generate `phase1_sanity_report.md`, including official-split,
+cache identity, qualitative, box, and visible-part checks.
 
-For every selector and `K`, save accuracy, macro-F1, per-image predictions, and
-the selection seed separately from the probe initialization seed.
+## Original motivation
 
-### Localization
-
-Map the CUB bounding box through the exact resize-and-center-crop geometry used
-by the model. Report:
-
-- fraction of selected patch centers inside the box
-- recall of all patch centers inside the box
-- selected-mask/bounding-box-mask IoU on the patch grid
-- pointing-game accuracy (whether the highest-scoring patch is inside)
-
-The bounding box identifies the bird broadly. It does not measure whether the
-selector found the fine-grained part that separates two species.
-
-## Exit decision
-
-Proceed to Phase 02 only if at least one semantic/localization selector:
-
-1. beats Random-K consistently across adjacent patch budgets, and
-2. localizes above the random baseline, and
-3. adds useful patches beyond attention or improves the fixed fusion.
-
-If only vision attention/rollout succeeds, the result validates localization-
-guided routing but not the planned logit-space claim. At that point either keep
-logit evidence as analysis or explicitly revise the paper's main hypothesis.
-
-## Deferred external controls
-
-DINO CLS attention, LOST/TokenCut, CLIP decomposition/CLIP Surgery, Grounding
-DINO, and SAM are not part of this rerun. They introduce a second model,
-additional supervision, or a different representation space. Add one as an
-external baseline only after the same-backbone result is understood.
-
-## Primary references
-
-- Joseph and Nanda, *Laying the Foundations for Vision and Multimodal
-  Mechanistic Interpretability & Open Problems*, 2024:
-  https://www.lesswrong.com/posts/kobJymvvcvhbjWFKe/laying-the-foundations-for-vision-and-multimodal-mechanistic%E9%93%BE%E6%8E%A5%E8%AF%A6%E6%83%85
-- Abnar and Zuidema, *Quantifying Attention Flow in Transformers*, ACL 2020:
-  https://aclanthology.org/2020.acl-main.385/
-- Gandelsman, Efros, and Steinhardt, *Interpreting CLIP's Image Representation
-  via Text-Based Decomposition*, ICLR 2024:
-  https://openreview.net/forum?id=5Ca9sSzuDp
-- Wang et al., *Self-Supervised Transformers for Unsupervised Object Discovery
-  Using Normalized Cut*, CVPR 2022:
-  https://openaccess.thecvf.com/content/CVPR2022/html/Wang_Self-Supervised_Transformers_for_Unsupervised_Object_Discovery_Using_Normalized_Cut_CVPR_2022_paper.html
-- Esmaeilkhani and Latecki, *Logit Lens Supervision for Patch-Level
-  Explanations in Vision-Language Models*, 2026:
-  https://arxiv.org/abs/2602.01530
+The reference blog is Arsh Naqvi,
+[*Using Logit Space of VLMs for Attention to Detail*](https://www.arsh-naqvi.xyz/blog/logit-space-vlm-attention-to-detail).
+It describes attention-based candidate localization and logit-lens filtering in
+a private trauma dataset. Our CUB benchmark is a new controlled test, not a
+reproduction of a public result from that post.

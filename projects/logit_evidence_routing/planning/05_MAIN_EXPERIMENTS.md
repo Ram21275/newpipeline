@@ -1,168 +1,51 @@
 # 05 — Main Experiments
 
-**Target completion: Sep 14**
+## Experiment 1 — Attribute recoverability trajectory
 
-## Goal
+Use a frozen, stage-aligned representation cache and the same linear multi-label
+probe at vision early/middle/late/final, projector output, and LLM
+early/middle/late/final. Plot macro-AUROC and macro-F1 versus depth, with
+per-attribute results retained in CSV.
 
-Generate the central paper table with enough statistical reliability to support the main claim.
+Primary question: where is the largest change in linear accessibility?
 
----
+## Experiment 2 — Spatial and semantic localization
 
-## Experiment 1 — CUB-200-2011
+On the same images and selected attributes, compare Vision-CLS attention, LLM
+attention, dense image–text similarity, and valid Logit Lens scores. Report:
 
-Methods:
+- fraction/recall/IoU within the broad bird box;
+- visible-part patch recall and any-part hit;
+- top-1 distance to the nearest relevant visible part;
+- overlap and disagreement between tools.
 
-1. Global frozen-VLM
-2. Random-K
-3. Attention-K
-4. Logit-K
-5. Attention+Logit
-6. LGER
+Primary question: are discriminative routing and semantic readability aligned?
 
-Primary K:
+## Experiment 3 — Representation versus normal VLM use
 
-```text
-K = 32
-```
+Ask fixed, parseable attribute questions and species questions. Compare VLM
+answer performance with probe accessibility from the same images and stages.
+Include prompt-only and image-shuffled controls.
 
-Seeds:
+Primary question: does a substantial, consistent accessibility–answer gap exist?
 
-```text
-0, 1, 2
-```
+## Experiment 4 — Minimal causal intervention
 
-Metrics:
-- top-1 accuracy
-- macro-F1
+Run only after `INTERMEDIATE_FINDINGS.md`. Remove or replace the smallest
+supported evidence set at the identified stage. Match random controls by number
+of tokens, spatial distribution where possible, and replacement magnitude.
+Measure answer-logit and accuracy changes.
 
----
+Primary question: does the final prediction depend causally on the identified
+information?
 
-## Experiment 2 — FGVC-Aircraft
+## Required outputs
 
-Use the **same method definitions and primary hyperparameters** unless there is a genuine dataset-specific necessity.
+- `results/attribute_probe_by_stage.csv`
+- `figures/attribute_probe_by_stage.png`
+- `results/localization_by_tool.csv`
+- `results/vlm_answer_vs_probe.csv`
+- `INTERMEDIATE_FINDINGS.md`
+- causal CSV/figure only after the transition report
 
-Again run three seeds for the final methods.
-
----
-
-## Experiment 3 — Low-data regime
-
-This is a major paper claim.
-
-Train with stratified fractions of the training set:
-
-```text
-5%
-10%
-25%
-100%
-```
-
-Required comparison:
-- Global
-- Attention-K
-- Logit-K
-- LGER
-
-At minimum run 3 seeds at 10% and 100%. If compute permits, use 3 seeds for every fraction.
-
-Plot:
-
-```text
-x-axis: labeled training fraction
-y-axis: accuracy / macro-F1
-```
-
-Hypothesis:
-
-> pretrained semantic routing is most useful when downstream labels are scarce.
-
----
-
-## Experiment 4 — Routing efficiency diagnostic
-
-This is analysis, not the main claim.
-
-For K ∈ {8,16,32,64}, record:
-- accuracy
-- macro-F1
-- number of processed downstream tokens
-- classifier FLOPs or runtime if easy to measure
-
-Do not turn this into an efficiency paper.
-
----
-
-## Statistical reporting
-
-For the central table report:
-
-\[
-mean \pm std
-\]
-
-over seeds.
-
-If two methods are very close, do not make strong significance claims without an appropriate statistical test.
-
----
-
-## Table 1 — Main result
-
-Generate programmatically:
-
-| Dataset | Method | Acc ↑ | Macro-F1 ↑ |
-|---|---|---:|---:|
-| CUB | Global | | |
-| CUB | Random-K | | |
-| CUB | Attention-K | | |
-| CUB | Logit-K | | |
-| CUB | Attn+Logit | | |
-| CUB | LGER | | |
-| Aircraft | ... | | |
-
----
-
-## Figure 1 — Method figure
-
-Prepare assets for:
-
-```text
-RGB image
-  ↓
-Frozen VLM
-  ↓
-late-layer visual hidden states
-  ↓ frozen LM head
-layer-wise semantic evidence
-  ↓ cross-layer aggregation
-Top-K evidence patches
-  ↓ original hidden states
-small classifier
-  ↓
-fine-grained prediction
-```
-
----
-
-## Figure 2 — Attention vs semantic evidence
-
-Choose examples illustrating:
-
-A. high attention + high semantic evidence
-B. high attention + low semantic evidence
-C. lower attention + high semantic evidence
-
-This figure should directly motivate why attention alone is insufficient.
-
----
-
-## Exit criteria
-
-By Sep 14:
-
-- [ ] Dataset A complete, all main methods, 3 seeds.
-- [ ] Dataset B has at least a complete single-seed table and final 3-seed jobs running/complete.
-- [ ] Low-data experiment shows the shape of the result.
-- [ ] Figures can be generated from saved outputs.
-- [ ] No manual metric transcription.
+Every table distinguishes development from final official-test evaluation.

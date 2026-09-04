@@ -8,6 +8,7 @@ from torch import nn
 
 from lger.hf_llava import (
     HfLlavaPatchExtractor,
+    fixed_concept_token_ids,
     square_grid,
     validate_bitsandbytes_4bit_runtime,
     visual_positions_and_query,
@@ -67,9 +68,17 @@ class FakeProcessor:
         self.image_processor = SimpleNamespace(
             image_mean=[0.0, 0.0, 0.0], image_std=[1.0, 1.0, 1.0]
         )
+        token_ids = {"bird": 1, "birds": 2, "two words": [3, 4], "blank": 5}
+
+        def encode(text: str, add_special_tokens: bool) -> list[int]:
+            value = token_ids[text]
+            return value if isinstance(value, list) else [value]
+
         self.tokenizer = SimpleNamespace(
+            all_special_ids=[],
             convert_ids_to_tokens=lambda values: [f"token_{value}" for value in values],
-            encode=lambda text, add_special_tokens: [1 if text == " bird" else 2],
+            decode=lambda values, **_: "" if values == [5] else f"token_{values[0]}",
+            encode=encode,
         )
 
     def __call__(self, **_: object) -> dict[str, torch.Tensor]:
@@ -153,8 +162,16 @@ class HfLlavaHelperTests(unittest.TestCase):
         )
         evidence = extractor.extract(object(), "Describe the image briefly.")
         self.assertEqual(extractor.concept_token_ids, (1, 2))
+        self.assertEqual(extractor.concept_tokens, ("token_1", "token_2"))
         self.assertEqual(evidence.evidence_scores["concept_logprob"].shape, (4,))
         self.assertTrue(torch.isfinite(evidence.evidence_scores["concept_logprob"]).all())
+
+    def test_fixed_concepts_reject_nonlexical_and_multitoken_inputs(self) -> None:
+        tokenizer = FakeProcessor().tokenizer
+        with self.assertRaisesRegex(ValueError, "whitespace-only"):
+            fixed_concept_token_ids(tokenizer, ("blank",))
+        with self.assertRaisesRegex(ValueError, "produced 2 tokens"):
+            fixed_concept_token_ids(tokenizer, ("two words",))
 
     def test_vision_localizers_are_patch_aligned(self) -> None:
         extractor = HfLlavaPatchExtractor(

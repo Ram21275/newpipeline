@@ -1,29 +1,43 @@
-# Logit-Guided Evidence Routing
+# Fine-Grained Evidence Tracing in Vision-Language Models
 
-Initial implementation for the ICLR 2027 project described in [`planning/`](planning/README.md).
+This is the implementation workspace for the ICLR 2027 project in
+[`planning/`](planning/README.md). The directory keeps its earlier
+`logit_evidence_routing` name so existing Kaggle paths and caches remain valid.
+The research question has changed: Logit Lens is now one diagnostic, not the
+proposed method.
 
-The research hypothesis is not considered validated yet. The current code establishes the leakage-safe and reproducible infrastructure needed for the Phase 01 signal-validation pilot.
+## Current question
 
-## What is implemented
+Where does fine-grained visual evidence exist across LLaVA's vision encoder,
+projector, and language model; how does its form change; and does answer
+generation use information that remains internally recoverable?
 
-- Frozen final-normalization + LM-head projection for patch hidden states.
-- Explicit visual-token gathering to prevent prompt/text-token contamination.
-- Class-agnostic max-probability, logit-margin, and negative-entropy evidence scores.
-- Last-layer, normalized late-layer mean, and persistence-aware aggregation.
-- One API for Random-K, Attention-K, Logit-K, Attention+Logit, and LGER.
-- Optional deterministic random context patches.
-- Selected late-layer hidden-state representation with retained coordinates and layer IDs.
-- A shared projection/Transformer/CLS classifier.
-- Reproducibility records containing commit, config, seed, split, checkpoint, metrics, routing statistics, runtime, and GPU memory.
-- Unit and synthetic smoke tests.
-- A Phase 01B same-backbone localization benchmark with vision CLS attention,
-  attention rollout, three vocabulary-confidence scores, a fixed bird-concept
-  logit lens, and fixed attention/logit fusion.
-- CUB bounding-box localization metrics and per-image probe predictions.
+The study separates:
 
-The defining contract is: **logits route; original hidden states represent**. The router never accepts a ground-truth label or class name.
+- spatial/discriminative importance;
+- linear accessibility of CUB attributes;
+- direct semantic readability;
+- causal use by the final answer.
 
-## Local setup
+## Current Phase 01 status
+
+The valid development-pilot result is that Vision-CLS attention is a strong
+router for late LLM patch states: Top-32 gives 95.0% species-probe accuracy,
+versus 54.4% for Random-32 and 66.3% for all-patch mean pooling. Its Top-32 patch
+centers are inside the broad bird box 80.8% of the time versus 47.1% for random.
+
+Important boundaries:
+
+- the classifier consumes late LLM states, not raw vision-layer features;
+- three runs are probe seeds on one fixed development split;
+- broad box overlap is not fine-grained part/attribute localization;
+- old `logit_concept` and `attention_logit_fusion` rows are invalid because the
+  concept set included standalone whitespace token 29871.
+
+The corrected code rejects nonlexical and multi-token concept entries, records
+decoded concept tokens, and refuses to benchmark legacy concept caches.
+
+## Local validation
 
 ```bash
 cd projects/logit_evidence_routing
@@ -34,107 +48,26 @@ python -m pytest
 python scripts/run_synthetic_pilot.py
 ```
 
-Without installing the package, the standard-library test runner also works from the repository root:
+## Kaggle setup
 
-```bash
-PYTHONPATH=projects/logit_evidence_routing/src \
-  python -m unittest discover -s projects/logit_evidence_routing/tests -v
-```
+Create a notebook with a GPU accelerator, enable Internet, and attach an official
+CUB-200-2011 dataset containing `images/`, `images.txt`,
+`image_class_labels.txt`, `train_test_split.txt`, `bounding_boxes.txt`, and
+`parts/part_locs.txt`.
 
-## Kaggle
-
-Create a Kaggle notebook, select a GPU accelerator, enable Internet, and attach a
-CUB-200-2011 dataset containing the official `CUB_200_2011` metadata and images.
-The repository is public, so no GitHub token is required.
-
-Clone the feature branch:
+Clone the public feature branch:
 
 ```python
 !git clone --branch feat/iclr --single-branch \
   https://github.com/Ram21275/newpipeline.git \
   /kaggle/working/newpipeline
-```
 
-Install the Kaggle dependencies and run the local validation suite:
-
-```python
 %cd /kaggle/working/newpipeline/projects/logit_evidence_routing
 !python -m pip install -r requirements-kaggle.txt
 !python -m unittest discover -s tests -v
-!python scripts/run_synthetic_pilot.py --output /kaggle/working/lger_synthetic_smoke.json
 ```
 
-The Kaggle requirements pin `bitsandbytes==0.50.2`, whose Linux wheel includes
-CUDA 12.8 support. The real extractor runs a tiny NF4 kernel before loading the
-checkpoint, so a mismatched runtime fails before model shards are downloaded.
-
-Create the deterministic Phase 01 split. The discovery code searches all attached
-Kaggle inputs and refuses ambiguous or incomplete CUB layouts:
-
-```python
-!python scripts/prepare_cub_pilot.py \
-  --search-root /kaggle/input \
-  --output /kaggle/working/phase1/pilot_manifest.csv \
-  --num-classes 20 \
-  --train-per-class 8 \
-  --val-per-class 4 \
-  --seed 0
-```
-
-Run a two-image GPU smoke extraction before committing to the full job:
-
-```python
-!python scripts/extract_phase1_features.py \
-  --manifest /kaggle/working/phase1/pilot_manifest.csv \
-  --search-root /kaggle/input \
-  --output-dir /kaggle/working/phase1/cache \
-  --model llava-hf/llava-1.5-7b-hf \
-  --layer-offset -2 \
-  --k 16 32 \
-  --random-seeds 0 1 2 \
-  --max-images 2
-```
-
-If that succeeds, rerun the same command without `--max-images 2`. It resumes
-from the two cached records instead of starting over.
-
-Train the identical mean-pooled linear probe for all three selectors:
-
-```python
-!python scripts/run_phase1_probes.py \
-  --manifest /kaggle/working/phase1/pilot_manifest.csv \
-  --cache-dir /kaggle/working/phase1/cache \
-  --output-dir /kaggle/working/phase1/results \
-  --k 16 32 \
-  --seeds 0 1 2
-```
-
-Generate the required lowest-overlap qualitative examples:
-
-```python
-!python scripts/plot_phase1_examples.py \
-  --cache-dir /kaggle/working/phase1/cache \
-  --output-dir /kaggle/working/phase1/results/qualitative \
-  --k 32 \
-  --count 20
-```
-
-Inspect `selector_summary.csv`, `selector_metrics.csv`, `patch_statistics.csv`,
-and the qualitative figures. Save a Kaggle notebook version so everything under
-`/kaggle/working/phase1` is preserved as notebook output.
-
-## Phase 01B: compare localization tools
-
-The first run's `logit` selector is now named `logit_maxprob`: it ranks a patch
-by the largest probability assigned to *any* vocabulary token. The referenced
-ViT logit-lens demonstration visualizes the predicted semantic identity at each
-patch; max-probability ranking discards that identity. Phase 01B therefore adds
-an explicit concept-conditioned companion, `logit_concept`, using the fixed
-tokens `bird` and `birds` for every CUB image. It also adds two localization
-signals from LLaVA's own frozen vision tower, vocabulary margin/entropy, and one
-fixed attention/logit fusion. This is a controlled rerun with no new backbone.
-
-Pull the updated branch in the existing Kaggle notebook:
+For an existing clone:
 
 ```python
 %cd /kaggle/working/newpipeline
@@ -144,85 +77,102 @@ Pull the updated branch in the existing Kaggle notebook:
 !python -m unittest discover -s tests -v
 ```
 
-Reuse the original manifest. Start with two images and a new cache directory:
+## Correct the existing Phase 01B cache
+
+If `/kaggle/working/phase1b/cache` still contains the 240 `.pt` records, reuse
+their cached hidden states. Start with two records:
+
+```python
+!python scripts/repair_phase1b_concepts.py \
+  --source-cache-dir /kaggle/working/phase1b/cache \
+  --output-dir /kaggle/working/phase1b_corrected/cache \
+  --fixed-concepts bird birds \
+  --max-images 2
+```
+
+Then resume all records by running the same command without `--max-images 2`:
+
+```python
+!python scripts/repair_phase1b_concepts.py \
+  --source-cache-dir /kaggle/working/phase1b/cache \
+  --output-dir /kaggle/working/phase1b_corrected/cache \
+  --fixed-concepts bird birds
+```
+
+This still loads LLaVA's frozen norm/head, but performs no image or full VLM
+forward pass. It writes a new cache; the original is never edited in place.
+
+If the old cache no longer exists, create a corrected cache from the images:
 
 ```python
 !python scripts/extract_phase1b_localizers.py \
   --manifest /kaggle/working/phase1/pilot_manifest.csv \
   --search-root /kaggle/input \
-  --output-dir /kaggle/working/phase1b/cache \
+  --output-dir /kaggle/working/phase1b_corrected/cache \
   --model llava-hf/llava-1.5-7b-hf \
   --layer-offset -2 \
   --fixed-concepts bird birds \
   --k 16 32 \
-  --random-seeds 0 1 2 \
-  --max-images 2
+  --random-seeds 0 1 2
 ```
 
-If the smoke run succeeds, rerun the same command without `--max-images 2`.
-The job resumes from completed records. Phase 01B uses a separate schema and
-must not reuse `/kaggle/working/phase1/cache`. It retains patch hidden states so
-new score combinations can be evaluated later without another LLaVA pass;
-budget roughly 1.3 GB for the 240-image pilot cache.
+The config should report two lexical tokens and
+`"concept_tokenization_policy": "single_lexical_token_v1"`. It must not contain
+standalone token `▁` / ID 29871.
 
-Run all matched probes and bounding-box localization metrics. Extraction has
-finished and released the model by this point, so the probe can use the GPU:
+## Regenerate matched results
 
 ```python
 !python scripts/run_phase1b_benchmark.py \
   --manifest /kaggle/working/phase1/pilot_manifest.csv \
-  --cache-dir /kaggle/working/phase1b/cache \
-  --output-dir /kaggle/working/phase1b/results \
+  --cache-dir /kaggle/working/phase1b_corrected/cache \
+  --output-dir /kaggle/working/phase1b_corrected/results \
   --k 16 32 \
   --selection-seeds 0 1 2 \
   --probe-seeds 0 1 2 \
   --device cuda
-```
 
-Generate 3-by-3 comparisons for the validation images with the lowest
-attention/concept overlap. Green is the CUB bird box and cyan dots are selected
-patch centers:
-
-```python
 !python scripts/plot_phase1b_localizers.py \
-  --cache-dir /kaggle/working/phase1b/cache \
-  --output-dir /kaggle/working/phase1b/results/qualitative \
+  --cache-dir /kaggle/working/phase1b_corrected/cache \
+  --output-dir /kaggle/working/phase1b_corrected/results/qualitative \
   --k 32 \
   --count 20
 ```
 
-Inspect the compact result tables:
+## Produce the Phase 01 gate report
 
 ```python
-import pandas as pd
-
-results = "/kaggle/working/phase1b/results"
-display(pd.read_csv(f"{results}/selector_summary.csv"))
-display(pd.read_csv(f"{results}/localization_summary.csv"))
+!python scripts/write_phase1_sanity_report.py \
+  --manifest /kaggle/working/phase1/pilot_manifest.csv \
+  --cache-dir /kaggle/working/phase1b_corrected/cache \
+  --results-dir /kaggle/working/phase1b_corrected/results \
+  --search-root /kaggle/input
 ```
 
-`selector_summary.csv` reports recognition accuracy/F1 and deltas from Random-K
-and LLM Attention-K. `localization_summary.csv` reports selected-patch precision,
-box-patch recall/IoU, pointing-game accuracy, and deltas from Random-K.
-`validation_predictions.csv` preserves image-level predictions for paired
-follow-up analysis. CUB boxes are used only for evaluation.
+This writes:
 
-For later code updates in the same Kaggle session:
+- `phase1_sanity_report.md`;
+- `vision_cls_part_localization.csv`.
+
+Stop before stage-wise representation extraction if the report says
+`STOP / INVESTIGATE`.
+
+## Outputs to download
 
 ```python
-%cd /kaggle/working/newpipeline
-!git pull --ff-only origin feat/iclr
-%cd projects/logit_evidence_routing
-!python -m pip install -r requirements-kaggle.txt
+!cd /kaggle/working && zip -r phase1b_corrected.zip \
+  phase1b_corrected/results \
+  phase1b_corrected/cache/extraction_config.json \
+  phase1b_corrected/cache/correction_summary.json
 ```
 
-If this updates `bitsandbytes` in an already-running notebook, each `!python`
-command starts a fresh process, so the extraction command can be retried directly.
+Download `phase1b_corrected.zip` from the Kaggle notebook Output/Files panel.
 
-## Next scientific milestone
+## Scientific reference
 
-Phase 01B asks whether any same-backbone semantic/localization selector beats
-Random-K across adjacent budgets, localizes above chance, and complements or
-improves attention. Do not introduce cross-layer LGER into this table. Apply the
-decision rules in `planning/01B_LOCALIZATION_SELECTOR_VALIDATION.md` before
-moving to Phase 02.
+The original motivation is Arsh Naqvi's
+[*Using Logit Space of VLMs for Attention to Detail*](https://www.arsh-naqvi.xyz/blog/logit-space-vlm-attention-to-detail).
+The post describes a private trauma pipeline that combines attention-based
+candidate localization with logit-lens filtering. This repository now uses that
+idea as motivation for a public, controlled representation-tracing study rather
+than presuming logit routing is the contribution.

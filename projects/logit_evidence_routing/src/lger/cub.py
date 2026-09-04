@@ -44,6 +44,16 @@ class CubBoundingBox:
     height: float
 
 
+@dataclass(frozen=True)
+class CubPartLocation:
+    """One CUB part annotation in original-image pixel coordinates."""
+
+    part_id: int
+    x: float
+    y: float
+    visible: bool
+
+
 def discover_cub_root(search_root: Path) -> Path:
     """Find one official CUB metadata root below a Kaggle input directory."""
 
@@ -153,6 +163,39 @@ def load_cub_bounding_boxes(cub_root: Path) -> dict[int, CubBoundingBox]:
     return boxes
 
 
+def load_cub_part_locations(cub_root: Path) -> dict[int, list[CubPartLocation]]:
+    """Load CUB's ``image_id part_id x y visible`` annotations."""
+
+    path = cub_root.expanduser().resolve() / "parts" / "part_locs.txt"
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing CUB part locations: {path}")
+    locations: dict[int, list[CubPartLocation]] = {}
+    seen: set[tuple[int, int]] = set()
+    with path.open(encoding="utf-8") as handle:
+        for line_number, raw_line in enumerate(handle, start=1):
+            parts = raw_line.split()
+            if not parts:
+                continue
+            if len(parts) != 5:
+                raise ValueError(f"Malformed part location at {path}:{line_number}")
+            image_id, part_id = int(parts[0]), int(parts[1])
+            key = (image_id, part_id)
+            if key in seen:
+                raise ValueError(f"Duplicate image/part pair {key} in {path}")
+            seen.add(key)
+            locations.setdefault(image_id, []).append(
+                CubPartLocation(
+                    part_id=part_id,
+                    x=float(parts[2]),
+                    y=float(parts[3]),
+                    visible=bool(int(parts[4])),
+                )
+            )
+    if not locations:
+        raise ValueError(f"CUB part-location file is empty: {path}")
+    return locations
+
+
 def map_bbox_to_center_crop(
     box: CubBoundingBox,
     *,
@@ -190,6 +233,33 @@ def map_bbox_to_center_crop(
     if clipped[0] >= clipped[2] or clipped[1] >= clipped[3]:
         raise ValueError("bounding box falls outside the model's center crop")
     return clipped
+
+
+def map_point_to_center_crop(
+    point: tuple[float, float],
+    *,
+    original_size: tuple[int, int],
+    output_size: tuple[int, int],
+) -> tuple[float, float] | None:
+    """Map a point through the same shortest-edge resize and center crop."""
+
+    original_width, original_height = original_size
+    output_width, output_height = output_size
+    if min(original_width, original_height, output_width, output_height) <= 0:
+        raise ValueError("image dimensions must be positive")
+    if output_width != output_height:
+        raise ValueError("classic LLaVA center-crop output must be square")
+    if original_width <= original_height:
+        resized_width = output_width
+        resized_height = int(output_width * original_height / original_width)
+    else:
+        resized_height = output_height
+        resized_width = int(output_height * original_width / original_height)
+    x = point[0] * resized_width / original_width - (resized_width - output_width) // 2
+    y = point[1] * resized_height / original_height - (resized_height - output_height) // 2
+    if not (0 <= x < output_width and 0 <= y < output_height):
+        return None
+    return x, y
 
 
 def make_balanced_pilot_split(

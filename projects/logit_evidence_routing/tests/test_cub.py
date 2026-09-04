@@ -6,9 +6,11 @@ from lger.cub import (
     CubBoundingBox,
     discover_cub_root,
     load_cub_bounding_boxes,
+    load_cub_part_locations,
     load_cub_records,
     make_balanced_pilot_split,
     map_bbox_to_center_crop,
+    map_point_to_center_crop,
 )
 
 
@@ -40,6 +42,14 @@ class CubTests(unittest.TestCase):
         )
         (root / "classes.txt").write_text(
             "1 001.class_1\n2 002.class_2\n3 003.class_3\n"
+        )
+        (root / "parts").mkdir()
+        (root / "parts" / "part_locs.txt").write_text(
+            "\n".join(
+                f"{current_id} 1 20 30 {1 if current_id % 2 else 0}"
+                for current_id in range(1, image_id)
+            )
+            + "\n"
         )
         return root
 
@@ -82,6 +92,23 @@ class CubTests(unittest.TestCase):
             output_size=(40, 40),
         )
         self.assertEqual(mapped, (0.0, 0.0, 40.0, 40.0))
+
+        point = map_point_to_center_crop(
+            (50.0, 25.0), original_size=(100, 50), output_size=(40, 40)
+        )
+        self.assertEqual(point, (20.0, 20.0))
+        self.assertIsNone(
+            map_point_to_center_crop(
+                (0.0, 25.0), original_size=(100, 50), output_size=(40, 40)
+            )
+        )
+
+    def test_part_locations_load_visibility(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = self.build_cub(Path(temporary))
+            locations = load_cub_part_locations(root)
+            self.assertTrue(locations[1][0].visible)
+            self.assertFalse(locations[2][0].visible)
 
 
 if __name__ == "__main__":

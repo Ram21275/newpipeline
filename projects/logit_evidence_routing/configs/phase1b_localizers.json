@@ -6,7 +6,8 @@
     "quantization": "4bit",
     "prompt": "Describe the image briefly.",
     "layer_offset": -2,
-    "fixed_concepts": ["bird", "birds"]
+    "fixed_concepts": ["bird", "birds"],
+    "concept_tokenization_policy": "single_lexical_token_v1"
   },
   "data": {
     "dataset": "CUB-200-2011",

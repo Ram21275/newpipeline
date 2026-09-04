@@ -1,84 +1,51 @@
-# 07 — ICLR Abstract Deadline
+# 07 — Abstract and Submission Claim Gate
 
-**Hard deadline: Sep 18, 2026, 11:59 PM AoE**
+Official deadlines (11:59 PM AoE): abstract 18 September 2026; paper
+25 September 2026.
 
-## Goal
+## Before submitting the abstract
 
-Submit a **genuine** title + abstract that reflects the actual paper. Do not use placeholder text.
+- [ ] Phase 01 sanity report passes.
+- [ ] Invalid concept/fusion rows are removed or corrected.
+- [ ] Stage-aligned cache is audited.
+- [ ] Attribute recoverability by stage exists as machine-readable results.
+- [ ] At least one quantitative spatial/semantic comparison is complete.
+- [ ] The title and abstract describe an observed phenomenon, not H1–H4 as fact.
+- [ ] All authors and anonymization requirements are settled.
 
-All intended authors must be added before the abstract deadline; no new authors can be added afterward under the ICLR 2027 rules.
+## Allowed abstract structure
 
----
+1. Fine-grained VLM decisions depend on localized attributes whose internal
+   trajectory is poorly understood.
+2. Introduce a controlled tracing protocol across the frozen vision encoder,
+   projector, LLM, and answer.
+3. State only the strongest measured transition with exact scope.
+4. Distinguish accessibility, semantic readability, spatial importance, and
+   causal use.
+5. Report the main quantitative result and uncertainty.
 
-## Sep 17 checklist
+## Claim templates—choose only after results
 
-### Results
-- [ ] Main claim supported on Dataset A.
-- [ ] Dataset B status known.
-- [ ] Low-data trend known.
-- [ ] Final method name/mechanism frozen.
+- “Linear accessibility of fine-grained attributes decreases most sharply
+  between ___ and ___.”
+- “Attribute information remains accessible through ___, but fixed-prompt VLM
+  answers trail the probe by ___.”
+- “Vision-side discriminative routing and text-readable semantic localization
+  overlap by only ___ despite ___.”
+- “Evidence becomes more distributed across tokens after ___ while pooled
+  accessibility remains ___.”
 
-### Paper framing
-- [ ] One-sentence problem statement.
-- [ ] One-sentence failure of attention-only routing.
-- [ ] One-sentence proposed method.
-- [ ] One-sentence main empirical result.
-- [ ] One-sentence analysis/interpretability result.
+## Forbidden claims without additional evidence
 
----
+- attention explains or causes the answer;
+- probe recoverability proves the VLM uses an attribute;
+- bounding-box localization proves part/attribute localization;
+- Logit Lens is a universal semantic localizer;
+- the 240-image development pilot is final held-out evidence;
+- a bottleneck exists because two selectors have different accuracy.
 
-## Recommended abstract structure
+## Final paper gate
 
-### Sentence 1 — problem
-Fine-grained visual decisions often depend on small local cues that are poorly characterized by global VLM representations or attention magnitude alone.
-
-### Sentence 2 — observation
-Intermediate visual-token representations of frozen VLMs can be projected through the language-model head, exposing patch-level semantic evidence in vocabulary space.
-
-### Sentence 3 — method
-Introduce Logit-Guided Evidence Routing, which aggregates this evidence across late layers to select a compact set of visual tokens while retaining their original hidden representations for downstream classification.
-
-### Sentence 4 — experiments
-Evaluate against global, random, attention-based, and single-layer logit-based routing on public fine-grained recognition benchmarks, including low-label regimes.
-
-### Sentence 5 — result
-Insert only results that are already measured by Sep 18.
-
-### Sentence 6 — implication
-Conclude that VLM logit space can function as a semantic routing signal rather than only an output or interpretability space.
-
----
-
-## Do not claim
-
-- state of the art unless directly established
-- universal VLM behavior from one model
-- medical reliability from qualitative trauma examples
-- causal interpretation of attention/logits
-- efficiency gains unless measured
-
----
-
-## Submission administration
-
-Before Sep 18:
-
-- [ ] Every coauthor has an OpenReview account.
-- [ ] Author list is final.
-- [ ] Conflicts/profile information updated.
-- [ ] Genuine abstract uploaded.
-- [ ] Title is sensible but may still be edited before full-paper deadline.
-
----
-
-## Freeze after abstract
-
-After submission, do not change the core scientific question.
-
-Permitted work:
-- finish experiments
-- simplify method
-- improve analysis
-- refine title/abstract before paper deadline if needed
-
-Avoid introducing a new major contribution after Sep 18.
+The paper needs an untouched official-test evaluation, paired uncertainty,
+complete configs, an explicit limitations section, and at least one causal test
+if it claims utilization rather than accessibility alone.

@@ -7,6 +7,7 @@ from lger.localization import (
     final_cls_attention,
     patch_centers_in_box,
     selection_localization_metrics,
+    selection_part_metrics,
 )
 
 
@@ -46,6 +47,17 @@ class LocalizationTests(unittest.TestCase):
             selection_localization_metrics(
                 torch.tensor([0, 0]), torch.tensor([True, False])
             )
+
+    def test_part_metrics_cover_visible_part_cells(self) -> None:
+        metrics = selection_part_metrics(
+            torch.tensor([5, 10]),
+            [(1.5, 1.5), (2.5, 2.5)],
+            grid_size=(4, 4),
+            image_size=(4, 4),
+        )
+        self.assertEqual(metrics["part_patch_recall"], 1.0)
+        self.assertEqual(metrics["top1_part_hit"], 1.0)
+        self.assertEqual(metrics["top1_nearest_part_distance_patches"], 0.0)
 
 
 if __name__ == "__main__":

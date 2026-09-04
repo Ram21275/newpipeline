@@ -1,164 +1,50 @@
-# 06 — Ablations and Representation Analysis
+# 06 — Controls and Alternative Explanations
 
-**Target completion: Sep 17**
+Run only controls that can change the interpretation of the central trajectory.
 
-## Goal
+## Probe controls
 
-Answer the reviewer questions that are most likely to challenge the central mechanism.
+- shuffled labels and prevalence baselines;
+- learning curves versus examples per attribute;
+- probe dimension and regularization held constant;
+- linear versus one small nonlinear probe only if linear accessibility is low;
+- report attributes with insufficient positives/negatives rather than hiding
+  them in a macro average.
 
-Do not run peripheral ablations.
+## Stage-comparison controls
 
----
+- compare per-token and pooled representations;
+- account for representation dimension and normalization;
+- test whether a random projection preserves the same trend;
+- verify exact vision-to-LLM token correspondence;
+- report missing/incompatible measurements as N/A, not zero.
 
-## Ablation A — Which layers contain useful evidence?
+## Localization controls
 
-Compare:
+- equal K for every selector;
+- random selection uncertainty over multiple selection seeds;
+- broad box and visible-part metrics reported separately;
+- top-1 and Top-K metrics both shown;
+- image-shuffled concept text and generic object words as semantic controls;
+- no per-image species names in localization queries.
 
-- one earlier layer
-- one middle/late layer
-- final layer
-- late-layer mean/persistence
+## Utilization controls
 
-Measure both:
-- classifier performance
-- semantic evidence quality/localization where possible
+- prompt-only and image-shuffled answer baselines;
+- intervention magnitude matched to random controls;
+- remove versus mean-replace to separate deletion artifacts;
+- repeat at one neighboring layer to test transition specificity.
 
-Desired conclusion should come from results, not assumption:
+## Alternative explanations to address
 
-> semantic patch evidence emerges or stabilizes in later VLM layers.
+1. Vision-CLS selection may remove background noise without localizing the
+   species-defining attribute.
+2. A high-dimensional probe may memorize a small pilot; use learning curves,
+   regularization, and the final untouched test split.
+3. Apparent information loss may reflect a mismatched readout basis rather than
+   destruction of information.
+4. Apparent movement may result from token mixing or broken spatial alignment.
+5. A probe/VLM gap may arise from prompt/parser failure rather than reasoning.
 
----
-
-## Ablation B — Patch budget K
-
-Run:
-
-```text
-K ∈ {8, 16, 32, 64}
-```
-
-for at least:
-- Random
-- Attention
-- Logit
-- LGER
-
-This checks whether the method only works by keeping many tokens.
-
----
-
-## Ablation C — Evidence score
-
-Compare:
-
-1. max probability
-2. top-1/top-2 logit margin
-3. negative entropy
-4. selected cross-layer persistence formulation
-
-Hold K and classifier constant.
-
----
-
-## Ablation D — Cross-layer aggregation
-
-Compare:
-
-```text
-last layer only
-mean across late layers
-persistence-aware score
-```
-
-If the simplest method wins, use it. Do not force a complex contribution.
-
----
-
-## Ablation E — Context patches
-
-Compare:
-
-```text
-evidence only
-evidence + random context
-```
-
-If context has negligible effect, remove it from the main method and keep it as an appendix result.
-
----
-
-## Analysis A — Selection overlap
-
-For each image calculate Jaccard overlap between:
-
-- Attention Top-K
-- Logit Top-K
-- LGER Top-K
-
-This quantitatively tests whether semantic routing is merely reproducing attention.
-
----
-
-## Analysis B — Spatial localization
-
-For CUB, where annotations allow it, measure whether selected patches fall inside:
-
-- object bounding box
-- annotated bird parts/regions if mapping is feasible
-
-Important:
-
-High overlap alone is not enough; attention may localize the bird broadly. The interesting question is whether selected patches are both localized and discriminative.
-
----
-
-## Analysis C — Layer trajectory visualization
-
-For selected spatial patches plot:
-
-\[
-e_i^{l_1}, e_i^{l_2}, ..., e_i^{l_m}
-\]
-
-Show:
-- persistent high-evidence patch
-- transient/noisy patch
-- background patch
-
-This provides the representation-learning interpretation of the method.
-
----
-
-## Analysis D — Decoded token examples
-
-For a small set of qualitative samples, show top decoded tokens from the same spatial patch across layers.
-
-Do not claim that every token is a literal object label. Treat decoding as an interpretability probe of the VLM representation.
-
----
-
-## Required paper artifacts
-
-By the end of this phase generate:
-
-```text
-paper_assets/
-  table_main.csv
-  table_ablation_layers.csv
-  table_ablation_k.csv
-  table_ablation_score.csv
-  fig_method.*
-  fig_attention_vs_logit.*
-  fig_low_data.*
-  fig_layer_trajectory.*
-```
-
----
-
-## Exit criteria
-
-- [ ] Every main paper claim has a corresponding experiment.
-- [ ] Attention-vs-logit difference is quantified, not only visualized.
-- [ ] Low-data claim has results.
-- [ ] Layer-wise claim has results.
-- [ ] We know which ablations belong in main paper vs appendix.
+Sparse autoencoders remain optional. Use one only when simpler measurements show
+a robust but semantically opaque transition.

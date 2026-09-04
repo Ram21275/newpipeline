@@ -113,6 +113,8 @@ def main() -> None:
         "prompt": args.prompt,
         "fixed_concepts": list(fixed_concepts),
         "concept_token_ids": list(extractor.concept_token_ids),
+        "concept_tokens": list(extractor.concept_tokens),
+        "concept_tokenization_policy": "single_lexical_token_v1",
         "k_values": k_values,
         "random_seeds": random_seeds,
         "deterministic_localizers": list(DETERMINISTIC_LOCALIZERS),

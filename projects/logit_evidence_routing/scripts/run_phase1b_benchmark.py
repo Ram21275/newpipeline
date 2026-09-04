@@ -27,6 +27,10 @@ from lger.probe import jaccard, run_linear_probe  # noqa: E402
 from lger.reproducibility import current_git_commit  # noqa: E402
 
 
+CONCEPT_SELECTORS = {"logit_concept", "attention_logit_fusion"}
+TOKENIZATION_POLICY = "single_lexical_token_v1"
+
+
 def write_csv(path: Path, rows: list[dict[str, object]], fields: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -35,7 +39,41 @@ def write_csv(path: Path, rows: list[dict[str, object]], fields: list[str]) -> N
         writer.writerows(rows)
 
 
-def load_cache(cache_dir: Path, expected_ids: set[int]) -> list[dict[str, object]]:
+def validate_concept_cache(
+    cache_config: dict[str, object] | None, selectors: tuple[str, ...]
+) -> None:
+    """Reject concept-dependent results from legacy whitespace-contaminated caches."""
+
+    if not CONCEPT_SELECTORS.intersection(selectors):
+        return
+    if cache_config is None:
+        raise RuntimeError("Concept selectors require extraction_config.json")
+    tokens = cache_config.get("concept_tokens")
+    token_ids = cache_config.get("concept_token_ids")
+    valid_tokens = (
+        isinstance(tokens, list)
+        and isinstance(token_ids, list)
+        and bool(tokens)
+        and len(tokens) == len(token_ids)
+        and all(
+            str(token).replace("▁", "").replace("Ġ", "").strip()
+            for token in tokens
+        )
+    )
+    if (
+        cache_config.get("concept_tokenization_policy") != TOKENIZATION_POLICY
+        or not valid_tokens
+    ):
+        raise RuntimeError(
+            "This cache predates the audited concept-token fix and cannot be used "
+            "for logit_concept or attention_logit_fusion. Run "
+            "scripts/repair_phase1b_concepts.py into a new cache directory first."
+        )
+
+
+def load_cache(
+    cache_dir: Path, expected_records: dict[int, object]
+) -> list[dict[str, object]]:
     by_id: dict[int, dict[str, object]] = {}
     for path in sorted((cache_dir / "records").glob("*.pt")):
         payload = torch.load(path, map_location="cpu", weights_only=False)
@@ -44,9 +82,17 @@ def load_cache(cache_dir: Path, expected_ids: set[int]) -> list[dict[str, object
             raise RuntimeError(f"Duplicate cache record for image {image_id}")
         if int(payload.get("schema_version", 0)) != 2:
             raise RuntimeError(f"Phase 01B requires schema version 2: {path}")
+        expected = expected_records.get(image_id)
+        if expected is not None:
+            for field in ("relative_path", "label", "class_name", "split"):
+                if payload.get(field) != getattr(expected, field):
+                    raise RuntimeError(
+                        f"Cache/manifest {field} mismatch for image {image_id}: {path}"
+                    )
         payload.pop("patch_hidden_states", None)
         payload.pop("processed_image", None)
         by_id[image_id] = payload
+    expected_ids = set(expected_records)
     missing = sorted(expected_ids - by_id.keys())
     unexpected = sorted(by_id.keys() - expected_ids)
     if missing or unexpected:
@@ -111,8 +157,17 @@ def main() -> None:
         raise ValueError("at least one probe seed is required")
 
     manifest = load_pilot_manifest(args.manifest)
-    expected_ids = {record.image_id for record in manifest}
-    cache_records = load_cache(args.cache_dir, expected_ids)
+    expected_records = {record.image_id: record for record in manifest}
+    if len(expected_records) != len(manifest):
+        raise RuntimeError("Manifest contains duplicate image IDs")
+    cache_config_path = args.cache_dir / "extraction_config.json"
+    cache_config = (
+        json.loads(cache_config_path.read_text(encoding="utf-8"))
+        if cache_config_path.is_file()
+        else None
+    )
+    validate_concept_cache(cache_config, selectors)
+    cache_records = load_cache(args.cache_dir, expected_records)
     labels = sorted({record.label for record in manifest})
     label_to_index = {label: index for index, label in enumerate(labels)}
     index_to_label = {index: label for label, index in label_to_index.items()}
@@ -443,12 +498,6 @@ def main() -> None:
         ],
     )
 
-    cache_config_path = args.cache_dir / "extraction_config.json"
-    cache_config = (
-        json.loads(cache_config_path.read_text(encoding="utf-8"))
-        if cache_config_path.is_file()
-        else None
-    )
     evaluation_config = {
         "schema_version": 2,
         "git_commit": current_git_commit(REPO_ROOT),
@@ -476,8 +525,8 @@ def main() -> None:
         "# Phase 01B notes\n\n"
         "This rerun compares frozen, same-backbone localization signals. CUB "
         "bounding boxes are used only for evaluation. `logit_concept` uses the "
-        "same fixed concept vocabulary for every image and never receives the "
-        "per-image species label. Selection seeds and probe seeds are recorded "
+        "same audited single-token concept vocabulary for every image and never "
+        "receives the per-image species label. Selection seeds and probe seeds are recorded "
         "separately.\n",
         encoding="utf-8",
     )

@@ -1,155 +1,58 @@
-# 02 — Public Data and Cache Pipeline
-
-**Target completion: Sep 7**
+# 02 — Stage-Aligned Representation Cache
 
 ## Goal
 
-Turn the pilot into a reproducible pipeline on public datasets without creating an unmanageably large hidden-state cache.
+Cache the same fine-grained evidence at comparable points through one frozen
+LLaVA pipeline without rerunning the model for every probe.
 
----
+## Initial stage set
 
-## Dataset A — CUB-200-2011
+Resolve layer indices from model depth and record the exact indices:
 
-Prepare:
-- official train/test split
-- class labels
-- bounding boxes if available
-- part/attribute annotations if available
+- vision: early, middle, late, final patch states;
+- projector: projected visual tokens before insertion into the LLM;
+- LLM: early, middle, late, and final visual-token states;
+- output: generated answer text and answer-token logits for fixed prompts.
 
-Use classification labels for training; localization/part annotations are for analysis only.
+Do not force LM-head Logit Lens onto a representation whose dimension or
+normalization is incompatible with the language output head.
 
-## Dataset B — FGVC-Aircraft
+## Per-image schema
 
-Prepare:
-- official train/validation/test protocol
-- variant labels
-- image paths
+Store:
 
-Do not tune on the official test set.
+- dataset version, image ID/path, class ID/name, official split;
+- CUB attributes and certainty/presence labels;
+- visible part IDs and original coordinates;
+- original and processed image sizes, crop transform, patch grid coordinates;
+- stage name, exact layer index, tensor shape/dtype;
+- patch-aligned representations for each selected stage;
+- available CLS/LLM attention maps;
+- fixed prompt and generated answer;
+- model name, resolved revision, code commit, and extraction config.
 
----
+Use safetensors, HDF5, or chunked memmap storage with an explicit index. Avoid a
+single monolithic file and avoid thousands of tiny per-layer files.
 
-## Cache design
+## Required invariants
 
-Do **not** blindly store `[all layers × all image patches × 4096]` for every public image. It can become hundreds of GB.
+- one stable spatial patch index maps across vision, projector, and LLM visual
+  tokens, or the schema records the exact mapping when token counts differ;
+- resumption validates the full config rather than silently mixing runs;
+- hidden states are detached and the entire VLM remains frozen;
+- train/validation/test labels never influence extraction or token selection;
+- an audit command checks IDs, shapes, finite values, and duplicate records.
 
-Use a two-stage cache.
+## Pilot sizing
 
-### Stage A — routing metadata
-
-For every image, store lightweight routing values:
-
-```text
-image_id
-layer
-patch_index
-x,y
-attention_score
-max_logit
-max_probability
-entropy
-logit_margin
-top_token_ids
-```
-
-### Stage B — candidate hidden states
-
-During preprocessing, retain only a generous candidate pool, for example Top-M patches per selected layer where `M > max K used in experiments`.
-
-Example:
-- experiment K ∈ {8,16,32,64}
-- cache M = 96 or 128
-
-Store hidden states in fp16/bfloat16.
-
-This allows routing ablations without retaining every token.
-
----
-
-## Layer scope
-
-The original project observed useful information in late layers. Start with a fixed late-layer window, e.g. the last 8–12 layers supported by the current VLM.
-
-Do not scan the entire network until the late-layer pipeline works.
-
-Record exact layer IDs in config.
-
----
-
-## Required preprocessing API
-
-Implement functions equivalent to:
-
-```python
-extract_vlm_states(image, prompt, layers)
-compute_patch_logits(hidden_states, lm_head, final_norm)
-compute_routing_scores(logits, attention=None)
-cache_candidates(image_id, metadata, hidden_states)
-```
-
-The exact code structure may differ, but these responsibilities must stay separate.
-
----
-
-## Reproducibility rules
-
-- Fix prompt template.
-- Fix image preprocessing.
-- Fix tokenizer/model revision.
-- Save model commit/revision.
-- Save patch-grid geometry.
-- Save layer IDs.
-- Use deterministic dataset splits.
-
----
-
-## Dataset validation
-
-Before full preprocessing, inspect 50 samples manually.
-
-Check:
-- [ ] correct class labels
-- [ ] no train/test overlap
-- [ ] image resolution/preprocessing correct
-- [ ] patch coordinates map correctly to image coordinates
-- [ ] bounding-box transforms remain correct after resize/crop
-
----
+Estimate storage from one image before the full run. Start with the existing
+240-image development pilot. Cache only selected layers initially. Expand to the
+official test set only after the measurement protocol is frozen.
 
 ## Deliverables
 
-```text
-data/
-  cub_manifest.csv
-  aircraft_manifest.csv
-
-cache/
-  cub/
-  aircraft/
-
-configs/
-  preprocessing_cub.yaml
-  preprocessing_aircraft.yaml
-
-reports/
-  cache_stats.md
-```
-
-`cache_stats.md` must contain:
-- number of images
-- layers cached
-- candidate M
-- disk usage
-- average preprocessing time/image
-- GPU used
-- any failures
-
----
-
-## Exit criteria
-
-- [ ] Both public datasets load reproducibly.
-- [ ] At least Dataset A is fully cached.
-- [ ] Dataset B preprocessing can run unattended.
-- [ ] Patch coordinates have been visually verified.
-- [ ] Cache size is acceptable for the available storage.
+- `representation_cache/`
+- `representation_cache_schema.md`
+- machine-readable extraction summary with bytes/image, runtime/image, and peak
+  memory
+- a smoke run showing one image can be loaded and aligned at every stage

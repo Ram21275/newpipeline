@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "lger"
 version = "0.1.0"
-description = "Logit-Guided Evidence Routing for frozen vision-language models"
+description = "Fine-grained evidence tracing in frozen vision-language models"
 requires-python = ">=3.9"
 dependencies = [
   "Pillow>=10",

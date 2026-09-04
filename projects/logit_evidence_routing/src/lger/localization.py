@@ -94,3 +94,50 @@ def selection_localization_metrics(
         "bbox_patch_iou": intersection / union,
         "pointing_game": float(bbox_patch_mask[int(selected_indices[0])]),
     }
+
+
+def selection_part_metrics(
+    selected_indices: torch.Tensor,
+    part_points: Sequence[tuple[float, float]],
+    *,
+    grid_size: tuple[int, int],
+    image_size: tuple[int, int],
+) -> dict[str, float]:
+    """Measure Top-K coverage and top-1 distance to visible annotated parts."""
+
+    rows, columns = grid_size
+    height, width = image_size
+    if rows <= 0 or columns <= 0 or height <= 0 or width <= 0:
+        raise ValueError("grid and image dimensions must be positive")
+    if selected_indices.ndim != 1 or selected_indices.numel() == 0:
+        raise ValueError("selection must be a non-empty one-dimensional tensor")
+    if selected_indices.min() < 0 or selected_indices.max() >= rows * columns:
+        raise ValueError("selection contains an out-of-range patch index")
+    if not part_points:
+        raise ValueError("at least one visible in-crop part is required")
+
+    part_patch_indices: set[int] = set()
+    for x, y in part_points:
+        if not (0 <= x < width and 0 <= y < height):
+            raise ValueError("part point falls outside the processed image")
+        column = min(int(x * columns / width), columns - 1)
+        row = min(int(y * rows / height), rows - 1)
+        part_patch_indices.add(row * columns + column)
+    selected = {int(index) for index in selected_indices.tolist()}
+    top_index = int(selected_indices[0])
+    top_row, top_column = divmod(top_index, columns)
+    nearest = min(
+        (
+            (top_row + 0.5 - (y * rows / height)) ** 2
+            + (top_column + 0.5 - (x * columns / width)) ** 2
+        )
+        ** 0.5
+        for x, y in part_points
+    )
+    return {
+        "part_patch_recall": len(selected & part_patch_indices) / len(part_patch_indices),
+        "any_part_hit": float(bool(selected & part_patch_indices)),
+        "top1_part_hit": float(top_index in part_patch_indices),
+        "top1_nearest_part_distance_patches": nearest,
+        "visible_part_patches": float(len(part_patch_indices)),
+    }
