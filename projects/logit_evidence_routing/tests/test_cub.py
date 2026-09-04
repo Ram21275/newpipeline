@@ -2,7 +2,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from lger.cub import discover_cub_root, load_cub_records, make_balanced_pilot_split
+from lger.cub import (
+    CubBoundingBox,
+    discover_cub_root,
+    load_cub_bounding_boxes,
+    load_cub_records,
+    make_balanced_pilot_split,
+    map_bbox_to_center_crop,
+)
 
 
 class CubTests(unittest.TestCase):
@@ -12,6 +19,7 @@ class CubTests(unittest.TestCase):
         images = []
         labels = []
         splits = []
+        bounding_boxes = []
         image_id = 1
         for label in range(1, 4):
             class_name = f"{label:03d}.class_{label}"
@@ -22,10 +30,14 @@ class CubTests(unittest.TestCase):
                 images.append(f"{image_id} {relative}")
                 labels.append(f"{image_id} {label}")
                 splits.append(f"{image_id} {1 if example < 4 else 0}")
+                bounding_boxes.append(f"{image_id} 10 20 30 40")
                 image_id += 1
         (root / "images.txt").write_text("\n".join(images) + "\n")
         (root / "image_class_labels.txt").write_text("\n".join(labels) + "\n")
         (root / "train_test_split.txt").write_text("\n".join(splits) + "\n")
+        (root / "bounding_boxes.txt").write_text(
+            "\n".join(bounding_boxes) + "\n"
+        )
         (root / "classes.txt").write_text(
             "1 001.class_1\n2 002.class_2\n3 003.class_3\n"
         )
@@ -57,6 +69,19 @@ class CubTests(unittest.TestCase):
                 seed=7,
             )
             self.assertEqual(pilot, repeated)
+
+    def test_bounding_boxes_load_and_follow_center_crop(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = self.build_cub(Path(temporary))
+            boxes = load_cub_bounding_boxes(root)
+            self.assertEqual(boxes[1], CubBoundingBox(10.0, 20.0, 30.0, 40.0))
+
+        mapped = map_bbox_to_center_crop(
+            CubBoundingBox(25.0, 0.0, 50.0, 50.0),
+            original_size=(100, 50),
+            output_size=(40, 40),
+        )
+        self.assertEqual(mapped, (0.0, 0.0, 40.0, 40.0))
 
 
 if __name__ == "__main__":

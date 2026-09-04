@@ -9,7 +9,8 @@ from typing import Any
 import torch
 from torch import nn
 
-from .scoring import logits_to_evidence
+from .localization import attention_rollout, final_cls_attention
+from .scoring import logits_to_evidence, logits_to_token_mass
 
 
 KAGGLE_BITSANDBYTES_VERSION = "0.50.2"
@@ -21,6 +22,7 @@ class PatchEvidence:
 
     hidden_states: torch.Tensor
     attention_scores: torch.Tensor
+    localization_scores: dict[str, torch.Tensor]
     evidence_scores: dict[str, torch.Tensor]
     top_token_ids: torch.Tensor
     grid_size: tuple[int, int]
@@ -68,6 +70,30 @@ def _module_device(module: nn.Module) -> torch.device:
         if parameter.device.type != "meta":
             return parameter.device
     raise RuntimeError(f"Could not determine device for {type(module).__name__}")
+
+
+def _module_dtype(module: nn.Module) -> torch.dtype:
+    for parameter in module.parameters():
+        if parameter.device.type != "meta" and parameter.is_floating_point():
+            return parameter.dtype
+    return torch.float32
+
+
+def fixed_concept_token_ids(
+    tokenizer: Any, concepts: tuple[str, ...]
+) -> tuple[int, ...]:
+    """Tokenize a fixed, image-independent concept vocabulary."""
+
+    token_ids: set[int] = set()
+    for raw_concept in concepts:
+        concept = raw_concept.strip()
+        if not concept:
+            raise ValueError("fixed concepts cannot be empty")
+        encoded = tokenizer.encode(f" {concept}", add_special_tokens=False)
+        if not encoded:
+            raise ValueError(f"fixed concept produced no tokens: {concept!r}")
+        token_ids.update(int(token_id) for token_id in encoded)
+    return tuple(sorted(token_ids))
 
 
 def _resolve_language_projection(model: nn.Module) -> tuple[nn.Module, nn.Module]:
@@ -156,6 +182,7 @@ class HfLlavaPatchExtractor:
         *,
         layer_offset: int = -2,
         projection_chunk_size: int = 64,
+        fixed_concepts: tuple[str, ...] = (),
     ) -> None:
         if layer_offset >= -1:
             raise ValueError(
@@ -168,6 +195,10 @@ class HfLlavaPatchExtractor:
         self.processor = processor
         self.layer_offset = layer_offset
         self.projection_chunk_size = projection_chunk_size
+        self.fixed_concepts = tuple(fixed_concepts)
+        self.concept_token_ids = fixed_concept_token_ids(
+            processor.tokenizer, self.fixed_concepts
+        )
         self.final_norm, self.lm_head = _resolve_language_projection(model)
         for parameter in self.model.parameters():
             parameter.requires_grad_(False)
@@ -189,6 +220,7 @@ class HfLlavaPatchExtractor:
         quantization: str = "4bit",
         layer_offset: int = -2,
         projection_chunk_size: int = 64,
+        fixed_concepts: tuple[str, ...] = (),
     ) -> "HfLlavaPatchExtractor":
         """Load the public pilot checkpoint; intended to run on Kaggle GPU."""
 
@@ -247,6 +279,7 @@ class HfLlavaPatchExtractor:
             processor,
             layer_offset=layer_offset,
             projection_chunk_size=projection_chunk_size,
+            fixed_concepts=fixed_concepts,
         )
 
     @property
@@ -270,7 +303,13 @@ class HfLlavaPatchExtractor:
             )
         return f"USER: <image>\n{prompt_text} ASSISTANT:"
 
-    def extract(self, image: Any, prompt_text: str) -> PatchEvidence:
+    def extract(
+        self,
+        image: Any,
+        prompt_text: str,
+        *,
+        include_vision_localizers: bool = False,
+    ) -> PatchEvidence:
         prompt = self.build_prompt(prompt_text)
         inputs = self.processor(images=image, text=prompt, return_tensors="pt")
         visual_positions, query_position = visual_positions_and_query(
@@ -278,6 +317,17 @@ class HfLlavaPatchExtractor:
         )
         grid_size = square_grid(visual_positions.numel())
         processed_image = self._image_for_display(inputs["pixel_values"])
+        localization_scores = (
+            self._vision_localization_scores(inputs["pixel_values"])
+            if include_vision_localizers
+            else {}
+        )
+        for name, scores in localization_scores.items():
+            if scores.numel() != visual_positions.numel():
+                raise RuntimeError(
+                    f"Vision localizer {name!r} returned {scores.numel()} patches; "
+                    f"LLaVA uses {visual_positions.numel()}"
+                )
 
         moved_inputs: dict[str, torch.Tensor] = {}
         for name, value in inputs.items():
@@ -316,7 +366,11 @@ class HfLlavaPatchExtractor:
         result = PatchEvidence(
             hidden_states=patch_hidden.detach().to("cpu", dtype=torch.float16),
             attention_scores=attention_scores.detach().cpu(),
-            evidence_scores={key: value.detach().cpu() for key, value in evidence_scores.items()},
+            localization_scores=localization_scores,
+            evidence_scores={
+                key: value.detach().cpu()
+                for key, value in evidence_scores.items()
+            },
             top_token_ids=top_token_ids.detach().cpu(),
             grid_size=grid_size,
             processed_image=processed_image,
@@ -324,6 +378,34 @@ class HfLlavaPatchExtractor:
         del outputs, moved_inputs
         torch.cuda.empty_cache()
         return result
+
+    def _vision_localization_scores(
+        self, pixel_values: torch.Tensor
+    ) -> dict[str, torch.Tensor]:
+        vision_tower = getattr(self.model, "vision_tower", None)
+        if not isinstance(vision_tower, nn.Module):
+            raise RuntimeError("Could not locate LLaVA's frozen vision tower")
+        vision_device = _module_device(vision_tower)
+        vision_dtype = _module_dtype(vision_tower)
+        moved_pixels = pixel_values.to(device=vision_device, dtype=vision_dtype)
+        with torch.inference_mode():
+            outputs = vision_tower(
+                moved_pixels,
+                output_attentions=True,
+                return_dict=True,
+            )
+        attentions = getattr(outputs, "attentions", None)
+        if not attentions or any(layer is None for layer in attentions):
+            raise RuntimeError(
+                "Vision tower returned no attention tensors; eager attention is required"
+            )
+        scores = {
+            "vision_cls_attention": final_cls_attention(attentions).detach().cpu(),
+            "vision_attention_rollout": attention_rollout(attentions).detach().cpu(),
+        }
+        del outputs, moved_pixels
+        torch.cuda.empty_cache()
+        return scores
 
     def _image_for_display(self, pixel_values: torch.Tensor) -> torch.Tensor:
         if pixel_values.ndim != 4 or pixel_values.shape[0] != 1:
@@ -342,13 +424,24 @@ class HfLlavaPatchExtractor:
             "margin": [],
             "negentropy": [],
         }
+        if self.concept_token_ids:
+            score_parts["concept_logprob"] = []
         top_id_parts: list[torch.Tensor] = []
         projection_device = _module_device(self.final_norm)
         for chunk in patch_hidden.split(self.projection_chunk_size, dim=0):
             chunk = chunk.to(projection_device)
             logits = self.lm_head(self.final_norm(chunk))
-            for method in score_parts:
+            for method in ("maxprob", "margin", "negentropy"):
                 score_parts[method].append(logits_to_evidence(logits, method))
+            if self.concept_token_ids:
+                concept_ids = torch.tensor(
+                    self.concept_token_ids,
+                    device=logits.device,
+                    dtype=torch.long,
+                )
+                score_parts["concept_logprob"].append(
+                    logits_to_token_mass(logits, concept_ids)
+                )
             top_id_parts.append(torch.topk(logits, k=5, dim=-1).indices)
             del logits
         return (

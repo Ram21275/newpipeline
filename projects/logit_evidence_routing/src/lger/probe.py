@@ -16,6 +16,7 @@ class ProbeResult:
     accuracy: float
     macro_f1: float
     train_loss: float
+    predictions: torch.Tensor
 
 
 def classification_metrics(
@@ -90,6 +91,7 @@ def run_linear_probe(
         accuracy=accuracy,
         macro_f1=macro_f1,
         train_loss=float(loss.detach().cpu()),
+        predictions=predictions,
     )
 
 

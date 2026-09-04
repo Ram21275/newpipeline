@@ -34,6 +34,16 @@ class PilotRecord:
     split: str
 
 
+@dataclass(frozen=True)
+class CubBoundingBox:
+    """One CUB bounding box in original-image pixel coordinates."""
+
+    x: float
+    y: float
+    width: float
+    height: float
+
+
 def discover_cub_root(search_root: Path) -> Path:
     """Find one official CUB metadata root below a Kaggle input directory."""
 
@@ -115,6 +125,71 @@ def load_cub_records(cub_root: Path) -> list[CubRecord]:
             )
         )
     return records
+
+
+def load_cub_bounding_boxes(cub_root: Path) -> dict[int, CubBoundingBox]:
+    """Load CUB's ``image_id x y width height`` bounding-box annotations."""
+
+    path = cub_root.expanduser().resolve() / "bounding_boxes.txt"
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing CUB bounding boxes: {path}")
+    boxes: dict[int, CubBoundingBox] = {}
+    with path.open(encoding="utf-8") as handle:
+        for line_number, raw_line in enumerate(handle, start=1):
+            parts = raw_line.split()
+            if not parts:
+                continue
+            if len(parts) != 5:
+                raise ValueError(f"Malformed bounding box at {path}:{line_number}")
+            image_id = int(parts[0])
+            if image_id in boxes:
+                raise ValueError(f"Duplicate image ID {image_id} in {path}")
+            box = CubBoundingBox(*(float(value) for value in parts[1:]))
+            if box.width <= 0 or box.height <= 0:
+                raise ValueError(f"Non-positive bounding box at {path}:{line_number}")
+            boxes[image_id] = box
+    if not boxes:
+        raise ValueError(f"CUB bounding-box file is empty: {path}")
+    return boxes
+
+
+def map_bbox_to_center_crop(
+    box: CubBoundingBox,
+    *,
+    original_size: tuple[int, int],
+    output_size: tuple[int, int],
+) -> tuple[float, float, float, float]:
+    """Map a box through Transformers' shortest-edge resize and center crop."""
+
+    original_width, original_height = original_size
+    output_width, output_height = output_size
+    if min(original_width, original_height, output_width, output_height) <= 0:
+        raise ValueError("image dimensions must be positive")
+    if output_width != output_height:
+        raise ValueError("classic LLaVA center-crop output must be square")
+    if original_width <= original_height:
+        resized_width = output_width
+        resized_height = int(output_width * original_height / original_width)
+    else:
+        resized_height = output_height
+        resized_width = int(output_height * original_width / original_height)
+    scale_x = resized_width / original_width
+    scale_y = resized_height / original_height
+    crop_left = (resized_width - output_width) // 2
+    crop_top = (resized_height - output_height) // 2
+    x1 = box.x * scale_x - crop_left
+    y1 = box.y * scale_y - crop_top
+    x2 = (box.x + box.width) * scale_x - crop_left
+    y2 = (box.y + box.height) * scale_y - crop_top
+    clipped = (
+        min(max(x1, 0.0), float(output_width)),
+        min(max(y1, 0.0), float(output_height)),
+        min(max(x2, 0.0), float(output_width)),
+        min(max(y2, 0.0), float(output_height)),
+    )
+    if clipped[0] >= clipped[2] or clipped[1] >= clipped[3]:
+        raise ValueError("bounding box falls outside the model's center crop")
+    return clipped
 
 
 def make_balanced_pilot_split(

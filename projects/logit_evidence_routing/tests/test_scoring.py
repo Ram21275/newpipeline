@@ -2,7 +2,12 @@ import unittest
 
 import torch
 
-from lger.scoring import aggregate_layer_scores, logits_to_evidence, stable_topk
+from lger.scoring import (
+    aggregate_layer_scores,
+    logits_to_evidence,
+    logits_to_token_mass,
+    stable_topk,
+)
 
 
 class ScoringTests(unittest.TestCase):
@@ -35,6 +40,14 @@ class ScoringTests(unittest.TestCase):
     def test_topk_uses_spatial_index_to_break_ties(self) -> None:
         indices = stable_topk(torch.tensor([2.0, 2.0, 1.0]), 2)
         self.assertEqual(indices.tolist(), [0, 1])
+
+    def test_token_mass_sums_a_fixed_concept_vocabulary(self) -> None:
+        logits = torch.tensor([[0.0, 1.0, 2.0, -1.0]])
+        token_ids = torch.tensor([1, 2, 2], dtype=torch.long)
+        expected = torch.logsumexp(
+            torch.log_softmax(logits, dim=-1)[:, [1, 2]], dim=-1
+        )
+        torch.testing.assert_close(logits_to_token_mass(logits, token_ids), expected)
 
 
 if __name__ == "__main__":

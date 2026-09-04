@@ -25,11 +25,22 @@ class FakeLanguageModel(nn.Module):
         return self.lm_head
 
 
+class FakeVisionTower(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.anchor = nn.Parameter(torch.zeros(1))
+
+    def forward(self, *_: object, **__: object) -> SimpleNamespace:
+        attention = torch.full((1, 2, 5, 5), 0.2)
+        return SimpleNamespace(attentions=(attention, attention))
+
+
 class FakeModel(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.anchor = nn.Parameter(torch.zeros(1))
         self.language_model = FakeLanguageModel()
+        self.vision_tower = FakeVisionTower()
         self.config = SimpleNamespace(image_token_index=99, torch_dtype=torch.float32)
 
     def forward(self, **_: object) -> SimpleNamespace:
@@ -57,7 +68,8 @@ class FakeProcessor:
             image_mean=[0.0, 0.0, 0.0], image_std=[1.0, 1.0, 1.0]
         )
         self.tokenizer = SimpleNamespace(
-            convert_ids_to_tokens=lambda values: [f"token_{value}" for value in values]
+            convert_ids_to_tokens=lambda values: [f"token_{value}" for value in values],
+            encode=lambda text, add_special_tokens: [1 if text == " bird" else 2],
         )
 
     def __call__(self, **_: object) -> dict[str, torch.Tensor]:
@@ -126,9 +138,41 @@ class HfLlavaHelperTests(unittest.TestCase):
         self.assertEqual(evidence.hidden_states.shape, (4, 3))
         self.assertEqual(evidence.grid_size, (2, 2))
         self.assertEqual(evidence.attention_scores.shape, (4,))
+        self.assertEqual(evidence.localization_scores, {})
         self.assertEqual(evidence.top_token_ids.shape, (4, 5))
         self.assertEqual(set(evidence.evidence_scores), {"maxprob", "margin", "negentropy"})
         self.assertEqual(evidence.processed_image.shape, (3, 4, 4))
+
+    def test_fixed_concepts_add_a_patch_aligned_token_mass(self) -> None:
+        extractor = HfLlavaPatchExtractor(
+            FakeModel(),
+            FakeProcessor(),
+            layer_offset=-2,
+            projection_chunk_size=2,
+            fixed_concepts=("bird", "birds"),
+        )
+        evidence = extractor.extract(object(), "Describe the image briefly.")
+        self.assertEqual(extractor.concept_token_ids, (1, 2))
+        self.assertEqual(evidence.evidence_scores["concept_logprob"].shape, (4,))
+        self.assertTrue(torch.isfinite(evidence.evidence_scores["concept_logprob"]).all())
+
+    def test_vision_localizers_are_patch_aligned(self) -> None:
+        extractor = HfLlavaPatchExtractor(
+            FakeModel(), FakeProcessor(), layer_offset=-2, projection_chunk_size=2
+        )
+        evidence = extractor.extract(
+            object(),
+            "Describe the image briefly.",
+            include_vision_localizers=True,
+        )
+        self.assertEqual(
+            set(evidence.localization_scores),
+            {"vision_cls_attention", "vision_attention_rollout"},
+        )
+        self.assertEqual(
+            {score.shape for score in evidence.localization_scores.values()},
+            {(4,)},
+        )
 
 
 if __name__ == "__main__":

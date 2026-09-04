@@ -1,0 +1,40 @@
+{
+  "experiment_name": "phase1b_localization_selectors",
+  "model": {
+    "name_or_path": "llava-hf/llava-1.5-7b-hf",
+    "revision": "main",
+    "quantization": "4bit",
+    "prompt": "Describe the image briefly.",
+    "layer_offset": -2,
+    "fixed_concepts": ["bird", "birds"]
+  },
+  "data": {
+    "dataset": "CUB-200-2011",
+    "manifest": "reuse_phase1_manifest",
+    "bounding_boxes": "evaluation_only"
+  },
+  "selection": {
+    "methods": [
+      "random",
+      "llm_attention",
+      "vision_cls_attention",
+      "vision_attention_rollout",
+      "logit_maxprob",
+      "logit_margin",
+      "logit_negentropy",
+      "logit_concept",
+      "attention_logit_fusion",
+      "global_all"
+    ],
+    "k_values": [16, 32],
+    "random_seeds": [0, 1, 2],
+    "representation": "mean of selected original LLaVA hidden states"
+  },
+  "probe": {
+    "type": "linear",
+    "epochs": 300,
+    "learning_rate": 0.01,
+    "weight_decay": 0.0001,
+    "probe_seeds": [0, 1, 2]
+  }
+}

@@ -29,6 +29,26 @@ def logits_to_evidence(logits: torch.Tensor, method: str) -> torch.Tensor:
     raise ValueError("method must be one of: margin, maxprob, negentropy")
 
 
+def logits_to_token_mass(
+    logits: torch.Tensor, token_ids: torch.Tensor
+) -> torch.Tensor:
+    """Return log probability mass assigned to a fixed vocabulary-token set."""
+
+    if logits.ndim < 2 or logits.shape[-1] < 2:
+        raise ValueError("logits must have at least two vocabulary entries")
+    if token_ids.ndim != 1 or token_ids.numel() == 0:
+        raise ValueError("token_ids must be a non-empty one-dimensional tensor")
+    if token_ids.dtype != torch.long:
+        raise TypeError("token_ids must use torch.long dtype")
+    if token_ids.min() < 0 or token_ids.max() >= logits.shape[-1]:
+        raise ValueError("token_ids contains an out-of-range vocabulary index")
+    unique_ids = token_ids.unique()
+    selected = torch.log_softmax(logits.float(), dim=-1).index_select(
+        -1, unique_ids.to(logits.device)
+    )
+    return torch.logsumexp(selected, dim=-1).to(logits.dtype)
+
+
 def normalize_within_layers(scores: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
     """Z-normalize patch scores independently within each layer."""
 
