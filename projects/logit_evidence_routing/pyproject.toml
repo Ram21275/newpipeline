@@ -18,7 +18,7 @@ dev = [
 ]
 kaggle = [
   "accelerate==1.2.1",
-  "bitsandbytes==0.45.2",
+  "bitsandbytes==0.50.2",
   "matplotlib>=3.8",
   "safetensors>=0.4",
   "transformers==4.49.0",

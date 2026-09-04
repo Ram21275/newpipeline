@@ -12,6 +12,9 @@ from torch import nn
 from .scoring import logits_to_evidence
 
 
+KAGGLE_BITSANDBYTES_VERSION = "0.50.2"
+
+
 @dataclass(frozen=True)
 class PatchEvidence:
     """One image's aligned hidden states, attention, and vocabulary evidence."""
@@ -97,6 +100,52 @@ def _resolve_language_projection(model: nn.Module) -> tuple[nn.Module, nn.Module
     return final_norm, lm_head
 
 
+def validate_bitsandbytes_4bit_runtime() -> str:
+    """Run one tiny NF4 operation before Hugging Face downloads model weights."""
+
+    try:
+        import bitsandbytes as bnb  # type: ignore[import-not-found]
+    except (ImportError, OSError) as error:
+        raise RuntimeError(
+            "4-bit loading requires a working bitsandbytes installation. "
+            f"Install the Kaggle requirements (bitsandbytes=={KAGGLE_BITSANDBYTES_VERSION}) "
+            "and retry."
+        ) from error
+
+    installed_version = str(getattr(bnb, "__version__", "unknown"))
+    cuda_version = str(torch.version.cuda or "unknown")
+    try:
+        sample = torch.linspace(
+            -1,
+            1,
+            steps=128,
+            device="cuda",
+            dtype=torch.float16,
+        ).reshape(2, 64)
+        quantized, quantization_state = bnb.functional.quantize_4bit(
+            sample,
+            quant_type="nf4",
+        )
+        restored = bnb.functional.dequantize_4bit(
+            quantized,
+            quantization_state,
+        )
+        if not bool(torch.isfinite(restored).all()):
+            raise RuntimeError("NF4 preflight produced non-finite values")
+    except Exception as error:
+        raise RuntimeError(
+            "bitsandbytes failed the CUDA NF4 preflight before model download "
+            f"(installed={installed_version}, PyTorch CUDA={cuda_version}). "
+            f"Reinstall bitsandbytes=={KAGGLE_BITSANDBYTES_VERSION} from "
+            "requirements-kaggle.txt, then rerun extraction."
+        ) from error
+    finally:
+        if "sample" in locals():
+            del sample
+        torch.cuda.empty_cache()
+    return installed_version
+
+
 class HfLlavaPatchExtractor:
     """Extract one late-layer patch signal from classic LLaVA-1.5."""
 
@@ -166,6 +215,11 @@ class HfLlavaPatchExtractor:
             "torch_dtype": torch.float16,
         }
         if quantization == "4bit":
+            installed_bnb = validate_bitsandbytes_4bit_runtime()
+            print(
+                "bitsandbytes NF4 preflight passed "
+                f"(version={installed_bnb}, PyTorch CUDA={torch.version.cuda})."
+            )
             load_kwargs["quantization_config"] = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_compute_dtype=torch.float16,

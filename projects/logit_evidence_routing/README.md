@@ -60,6 +60,10 @@ Install the Kaggle dependencies and run the local validation suite:
 !python scripts/run_synthetic_pilot.py --output /kaggle/working/lger_synthetic_smoke.json
 ```
 
+The Kaggle requirements pin `bitsandbytes==0.50.2`, whose Linux wheel includes
+CUDA 12.8 support. The real extractor runs a tiny NF4 kernel before loading the
+checkpoint, so a mismatched runtime fails before model shards are downloaded.
+
 Create the deterministic Phase 01 split. The discovery code searches all attached
 Kaggle inputs and refuses ambiguous or incomplete CUB layouts:
 
@@ -123,6 +127,9 @@ For later code updates in the same Kaggle session:
 %cd projects/logit_evidence_routing
 !python -m pip install -r requirements-kaggle.txt
 ```
+
+If this updates `bitsandbytes` in an already-running notebook, each `!python`
+command starts a fresh process, so the extraction command can be retried directly.
 
 ## Next scientific milestone
 

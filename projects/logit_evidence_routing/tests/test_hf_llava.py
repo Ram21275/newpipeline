@@ -1,5 +1,7 @@
+import sys
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import torch
 from torch import nn
@@ -7,6 +9,7 @@ from torch import nn
 from lger.hf_llava import (
     HfLlavaPatchExtractor,
     square_grid,
+    validate_bitsandbytes_4bit_runtime,
     visual_positions_and_query,
 )
 
@@ -66,6 +69,38 @@ class FakeProcessor:
 
 
 class HfLlavaHelperTests(unittest.TestCase):
+    def test_bitsandbytes_preflight_exercises_nf4_kernel(self) -> None:
+        functional = SimpleNamespace(
+            quantize_4bit=lambda values, quant_type: (values, object()),
+            dequantize_4bit=lambda values, state: values,
+        )
+        fake_bnb = SimpleNamespace(__version__="0.50.2", functional=functional)
+        cpu_sample = torch.linspace(-1, 1, steps=128).reshape(2, 64)
+        with (
+            patch.dict(sys.modules, {"bitsandbytes": fake_bnb}),
+            patch.object(torch, "linspace", return_value=cpu_sample),
+            patch.object(torch.cuda, "empty_cache"),
+        ):
+            version = validate_bitsandbytes_4bit_runtime()
+        self.assertEqual(version, "0.50.2")
+
+    def test_bitsandbytes_preflight_reports_runtime_versions(self) -> None:
+        def fail_quantization(*_: object, **__: object) -> None:
+            raise AttributeError("missing native CUDA symbol")
+
+        fake_bnb = SimpleNamespace(
+            __version__="0.45.2",
+            functional=SimpleNamespace(quantize_4bit=fail_quantization),
+        )
+        cpu_sample = torch.linspace(-1, 1, steps=128).reshape(2, 64)
+        with (
+            patch.dict(sys.modules, {"bitsandbytes": fake_bnb}),
+            patch.object(torch, "linspace", return_value=cpu_sample),
+            patch.object(torch.cuda, "empty_cache"),
+            self.assertRaisesRegex(RuntimeError, "installed=0.45.2"),
+        ):
+            validate_bitsandbytes_4bit_runtime()
+
     def test_visual_positions_and_last_text_query(self) -> None:
         input_ids = torch.tensor([[10, 99, 99, 99, 11, 12]])
         attention_mask = torch.ones_like(input_ids)
