@@ -1,0 +1,32 @@
+{
+  "experiment_name": "phase1_random_attention_logit",
+  "model": {
+    "name_or_path": "llava-hf/llava-1.5-7b-hf",
+    "revision": "main",
+    "quantization": "4bit",
+    "prompt": "Describe the image briefly.",
+    "layer_offset": -2,
+    "attention_definition": "mean over heads from the final prompt token at the same late decoder layer"
+  },
+  "data": {
+    "dataset": "CUB-200-2011",
+    "source_partition": "official_train_only",
+    "classes": 20,
+    "train_per_class": 8,
+    "validation_per_class": 4,
+    "split_seed": 0
+  },
+  "selection": {
+    "methods": ["random", "attention", "logit_maxprob"],
+    "k_values": [16, 32],
+    "random_seeds": [0, 1, 2],
+    "representation": "mean of selected original hidden states"
+  },
+  "probe": {
+    "type": "linear",
+    "epochs": 300,
+    "learning_rate": 0.01,
+    "weight_decay": 0.0001,
+    "seeds": [0, 1, 2]
+  }
+}

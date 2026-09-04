@@ -8,12 +8,20 @@ version = "0.1.0"
 description = "Logit-Guided Evidence Routing for frozen vision-language models"
 requires-python = ">=3.9"
 dependencies = [
+  "Pillow>=10",
   "torch>=2.2",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=8,<9",
+]
+kaggle = [
+  "accelerate==1.2.1",
+  "bitsandbytes==0.45.2",
+  "matplotlib>=3.8",
+  "safetensors>=0.4",
+  "transformers==4.49.0",
 ]
 
 [tool.setuptools.packages.find]

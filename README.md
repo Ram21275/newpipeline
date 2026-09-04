@@ -6,7 +6,7 @@ This repository is a monorepo: each research effort lives under `projects/` with
 
 | Project | Status | Location |
 |---|---|---|
-| Logit-Guided Evidence Routing (ICLR 2027) | Initial implementation | [`projects/logit_evidence_routing`](projects/logit_evidence_routing) |
+| Logit-Guided Evidence Routing (ICLR 2027) | Phase 01 Kaggle pilot ready | [`projects/logit_evidence_routing`](projects/logit_evidence_routing) |
 
 ## Branch workflow
 
