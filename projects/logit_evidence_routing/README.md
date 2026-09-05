@@ -37,6 +37,15 @@ Important boundaries:
 The corrected code rejects nonlexical and multi-token concept entries, records
 decoded concept tokens, and refuses to benchmark legacy concept caches.
 
+The corrected Kaggle probe run subsequently reached 91.3%/95.0% accuracy for
+`logit_concept` at K=16/K=32 and 88.8%/95.0% for
+`attention_logit_fusion`. These remain development-pilot findings until the
+corrected result bundle and Phase 01 sanity report are audited. The full
+architecture, result, evidence-boundary, and forward-test report is available
+in [`reports/PHASE_01B_TECHNICAL_REPORT.md`](reports/PHASE_01B_TECHNICAL_REPORT.md).
+To continue this work in a new chat, use the self-contained
+[`NEXT_CHAT_HANDOFF.md`](NEXT_CHAT_HANDOFF.md).
+
 ## Local validation
 
 ```bash
@@ -161,10 +170,17 @@ standalone token `▁` / ID 29871.
 This writes:
 
 - `phase1_sanity_report.md`;
+- `phase1_gate.json`, the machine-readable gate decision and audit findings;
 - `vision_cls_part_localization.csv`.
 
-Stop before stage-wise representation extraction if the report says
-`STOP / INVESTIGATE`.
+The audit verifies that the benchmark points to the corrected cache, requires
+the exact `bird`/`birds` lexical tokens, rejects token ID 29871, checks corrected
+prediction/localization coverage, and cross-checks the qualitative index. It
+returns exit code 2 and records `STOP / INVESTIGATE` if a blocking check fails.
+`PASS WITH ANOMALY` is a successful gate that explicitly carries the strong
+Top-K box concentration/weak top-1 pointing mismatch forward. Stop before
+stage-wise representation extraction unless `phase1_gate.json` records
+`"passed": true`.
 
 ## Moving forward after Phase 01
 
