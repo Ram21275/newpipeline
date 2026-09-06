@@ -150,6 +150,20 @@ class CubTests(unittest.TestCase):
             self.assertIsNone(targets[1]["primary_target"])
             self.assertEqual(len(labels[2]), 1)
 
+    def test_filtered_attribute_loading_ignores_only_unrequested_damage(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = self.build_cub(Path(temporary))
+            labels_path = root / "attributes" / "image_attribute_labels.txt"
+            with labels_path.open("a", encoding="utf-8") as handle:
+                handle.write("15 2 0 1 0 1.509\n")
+
+            requested = load_cub_image_attribute_labels(root, image_ids={1})
+            self.assertEqual(len(requested[1]), 2)
+            with self.assertRaisesRegex(ValueError, "Malformed attribute label"):
+                load_cub_image_attribute_labels(root, image_ids={15})
+            with self.assertRaisesRegex(ValueError, "Malformed attribute label"):
+                load_cub_image_attribute_labels(root)
+
     def test_attribute_subset_uses_only_requested_training_images(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = self.build_cub(Path(temporary))

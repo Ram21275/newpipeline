@@ -291,11 +291,18 @@ def load_cub_image_attribute_labels(
             parts = raw_line.split()
             if not parts:
                 continue
+            if requested is not None:
+                try:
+                    candidate_image_id = int(parts[0])
+                except ValueError as error:
+                    raise ValueError(
+                        f"Malformed attribute image ID at {path}:{line_number}"
+                    ) from error
+                if candidate_image_id not in requested:
+                    continue
             if len(parts) != 5:
                 raise ValueError(f"Malformed attribute label at {path}:{line_number}")
             image_id, attribute_id = int(parts[0]), int(parts[1])
-            if requested is not None and image_id not in requested:
-                continue
             key = (image_id, attribute_id)
             if key in seen:
                 raise ValueError(f"Duplicate image/attribute pair {key} in {path}")

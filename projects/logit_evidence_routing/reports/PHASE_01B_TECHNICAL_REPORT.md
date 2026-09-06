@@ -341,7 +341,7 @@ parts.
 | Corrected qualitative figures | Complete | Reviewed 20 deliberately selected low-attention/concept-overlap disagreement cases |
 | Full Phase 01 sanity gate | **PASS WITH ANOMALY** | All 16 blocking checks passed; the strong Top-K box concentration/weak Vision-CLS top-1 pointing mismatch remains explicit |
 
-The local software suite passes 49 tests after the hardened sanity gate and
+The local software suite passes 50 tests after the hardened sanity gate and
 initial Phase 02 smoke implementation. The scientific decision additionally rests on the corrected
 Kaggle artifacts and qualitative review described below.
 

@@ -94,7 +94,7 @@ remote: origin/feat/iclr contains this commit
 
 The Phase 2 implementation is committed and pushed. The working tree should be
 clean unless the user has made newer changes; preserve any such changes. The
-local test suite currently passes all 49 tests.
+local test suite currently passes all 50 tests.
 
 ## 3. Completed implementation
 
@@ -351,6 +351,13 @@ presence, worker time, and explicit missing/uncertain states. It includes:
 - missing/uncertain-label handling;
 - tests with a minimal synthetic CUB fixture;
 - a documented attribute subset chosen using training data only.
+
+The Kaggle CUB copy at `wenewone/cub2002011` contains 606 six-field annotation
+rows, but none belongs to the 160 development-training IDs used for attribute
+selection. Filtered loading now applies the requested image-ID scope before
+validating row shape: out-of-scope damage is ignored, while a malformed row for
+any requested image remains a hard failure. Audit all 240 pilot IDs before a
+future full-cache extraction.
 
 No class descriptions or attribute-to-part mappings were inferred from
 validation results.
