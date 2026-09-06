@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "git_commit": "1a6e0c96681f250659ce703207931289cd9112c2",
+  "cache_config_digest": "63cf0e80ec0a24533682467b6f3b23ccded8625ef25d2fb43d012aa0e72179d8",
+  "result_rows": 90,
+  "per_attribute_rows": 2340,
+  "official_test_images_used": 0,
+  "official_test_split_untouched": true,
+  "sd_definition": "sample SD across seeds, ddof=1; not a confidence interval",
+  "prevalence_train_loss": "NaN by design; no fitting"
+}

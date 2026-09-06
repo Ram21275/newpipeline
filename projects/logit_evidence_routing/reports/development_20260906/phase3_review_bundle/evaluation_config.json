@@ -1,0 +1,45 @@
+{
+  "cache_dir": "/kaggle/working/phase2_stage_cache",
+  "cache_validation_sha256": "25a5853924343f5ec627af043c42d4f70d7b9528648dfc19acf09696c3141ff0",
+  "controls": [
+    "primary",
+    "prevalence",
+    "shuffled_labels",
+    "random_projection"
+  ],
+  "device": "cuda",
+  "epochs": 300,
+  "git_commit": "1a6e0c96681f250659ce703207931289cd9112c2",
+  "learning_rate": 0.01,
+  "masked_states": [
+    "guess",
+    "not visible",
+    "missing"
+  ],
+  "normalization": "training_feature_mean_std_v1",
+  "official_test_images_used": 0,
+  "pooling": [
+    "mean"
+  ],
+  "purpose": "phase3_development_attribute_recoverability",
+  "random_projection_dim": 256,
+  "schema_version": 1,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "stages": [
+    "vision.early",
+    "vision.middle",
+    "vision.late",
+    "vision.final",
+    "projector.output",
+    "llm.early",
+    "llm.middle",
+    "llm.late",
+    "llm.final"
+  ],
+  "threshold_policy": "training_f1_only_v1",
+  "weight_decay": 0.0001
+}

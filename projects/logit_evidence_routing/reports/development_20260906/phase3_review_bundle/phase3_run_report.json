@@ -1,0 +1,37 @@
+{
+  "cache_config_digest": "63cf0e80ec0a24533682467b6f3b23ccded8625ef25d2fb43d012aa0e72179d8",
+  "controls": [
+    "primary",
+    "prevalence",
+    "shuffled_labels",
+    "random_projection"
+  ],
+  "images": 240,
+  "official_test_images_used": 0,
+  "per_attribute_rows": 2340,
+  "pooling": [
+    "mean"
+  ],
+  "result_rows": 90,
+  "schema_version": 1,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "selected_attributes": 26,
+  "stages": [
+    "vision.early",
+    "vision.middle",
+    "vision.late",
+    "vision.final",
+    "projector.output",
+    "llm.early",
+    "llm.middle",
+    "llm.late",
+    "llm.final"
+  ],
+  "status": "PASS",
+  "train_images": 160,
+  "validation_images": 80
+}

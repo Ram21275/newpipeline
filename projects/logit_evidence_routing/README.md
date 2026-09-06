@@ -351,3 +351,21 @@ The post describes a private trauma pipeline that combines attention-based
 candidate localization with logit-lens filtering. This repository now uses that
 idea as motivation for a public, controlled representation-tracing study rather
 than presuming logit routing is the contribution.
+
+## Verified development results (6 September 2026)
+
+The full nine-stage Phase 3 development run and the one-image Phase 4
+cached-localizer reuse smoke have passed. Read
+[`reports/development_20260906/REVIEW.md`](reports/development_20260906/REVIEW.md)
+for the independently audited source tables and attribute-level findings, and
+[`NEXT_CHAT_HANDOFF.md`](NEXT_CHAT_HANDOFF.md) for current state. Earlier smoke
+commands above are historical reproducibility instructions, not the next task.
+
+The original Kaggle cells are versioned in
+[`notebooks/phase3_development_kaggle.ipynb`](notebooks/phase3_development_kaggle.ipynb)
+and [`notebooks/phase4_entry_cached_localizer_smoke.ipynb`](notebooks/phase4_entry_cached_localizer_smoke.ipynb).
+No model weights, representation caches, or datasets are included in the result bundle.
+
+Next: the missing Phase 4 dense semantic/attribute-part localization smoke on
+Kaggle. The existing-map smoke does not complete Phase 4. Official test remains
+untouched, and no causal transition has been selected.

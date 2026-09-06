@@ -1,0 +1,38 @@
+{
+  "status": "PASS",
+  "scope": "one_training_image_existing_cached_localizers_only",
+  "phase4_complete": false,
+  "git_commit": "1a6e0c96681f250659ce703207931289cd9112c2",
+  "cache_config_digest": "63cf0e80ec0a24533682467b6f3b23ccded8625ef25d2fb43d012aa0e72179d8",
+  "image_id": 544,
+  "official_test_images_used": 0,
+  "K": [
+    16,
+    32
+  ],
+  "random_seeds": [
+    0,
+    1,
+    2
+  ],
+  "metric_rows": 14,
+  "agreement_rows": 42,
+  "stage_indices": {
+    "llm.early": 8,
+    "llm.final": 32,
+    "llm.late": 31,
+    "llm.middle": 16,
+    "projector.output": null,
+    "vision.early": 6,
+    "vision.final": 24,
+    "vision.late": 23,
+    "vision.middle": 12
+  },
+  "part_metrics_available": true,
+  "source_record_sha256": "3ff37096ef8ffcdc17de80624f3b582a97a39a451d9c12cf876f934e5c616808",
+  "missing_for_full_phase4": [
+    "dense image-text similarity",
+    "attribute-specific descriptions and part mapping",
+    "complete matched development evaluation and qualitative review"
+  ]
+}

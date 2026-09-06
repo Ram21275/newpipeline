@@ -1,0 +1,54 @@
+{
+  "phase3_run_report.json": {
+    "bytes": 680,
+    "sha256": "1c89f6476c27245b74b75ee23e4c969b77c249d882ff9d248a5c623b5cd734c2"
+  },
+  "phase3_aggregation_report.json": {
+    "bytes": 437,
+    "sha256": "adcfd2055b82327a0491d2dd515c851a904bd30a7b24f63ef88af6fc6687102b"
+  },
+  "evaluation_config.json": {
+    "bytes": 978,
+    "sha256": "3a0ac116319d835f0d0e4b9fa29715dc9f6e63c64320e661f0dbf0f062d60171"
+  },
+  "attribute_probe_by_stage.csv": {
+    "bytes": 8276,
+    "sha256": "d819bbc29e5b9bb0414f44f8b8b9c727addac1d03dc1fce85cfb37118289197f"
+  },
+  "per_attribute_metrics.csv": {
+    "bytes": 432759,
+    "sha256": "5170de0432d2c78a3b22816656e1df1e206074e079234f0939d7f78029fcd8e7"
+  },
+  "stage_seed_summary.csv": {
+    "bytes": 4507,
+    "sha256": "ef5a059f27d2b977c48d176dd7caf3b9a0819653e1c366c415ce21223dd81976"
+  },
+  "paired_seed_deltas.csv": {
+    "bytes": 4948,
+    "sha256": "6e8d0e376312ffbfaa47cc2a6ce9503bb5c156782ee227b5f30c6412deb0b46d"
+  },
+  "paired_delta_summary.csv": {
+    "bytes": 2382,
+    "sha256": "e18d8b03dafe8ffe4d2c2521ecd0cbab172ccbed47b4d5defe430d7636aac81d"
+  },
+  "invocation.json": {
+    "bytes": 908,
+    "sha256": "450ef0b35a04403b98a4a672bd8382ce9c005c4b6cbc60951c024b98c7fc22f3"
+  },
+  "stage_trajectory.png": {
+    "bytes": 306580,
+    "sha256": "821cc2672a8495015510f1c7e46776edd42ae946df2df81463a2744e7413b9cd"
+  },
+  "stage_trajectory.pdf": {
+    "bytes": 35032,
+    "sha256": "d221aecc06552c6f0c041bea493ac99ba15d80820a988ae9811edc22ba258b76"
+  },
+  "auroc_trajectory_readable.csv": {
+    "bytes": 1114,
+    "sha256": "2881fbe12a594f7dbbd06885446ade9d476b7eefc66415f7296f9e52473f5773"
+  },
+  "f1_trajectory_readable.csv": {
+    "bytes": 1117,
+    "sha256": "e14004463228318bc155719ac65bdb951bd8d641fb856bd4c4a4441600b8d289"
+  }
+}
