@@ -296,6 +296,42 @@ Proceed to Phase 3 only if `validation_report.json` reports `PASS`, 240 records,
 160/80 development splits, nine stages per record, and zero official-test
 images. The untouched official CUB test split remains reserved for Phase 8.
 
+## Phase 3 attribute-probe smoke
+
+After the full cache passes, smoke-test the attribute-recoverability pipeline on
+the three boundary representations `vision.final`, `projector.output`, and
+`llm.final`. This is an optimization and control check, not the frozen nine-stage
+result:
+
+```python
+!PYTHONPATH=src python scripts/run_phase3_attribute_probes.py \
+  --cache-dir /kaggle/working/phase2_stage_cache \
+  --output-dir /kaggle/working/phase3_attribute_smoke \
+  --stages vision.final projector.output llm.final \
+  --pooling mean \
+  --controls primary prevalence shuffled_labels random_projection \
+  --seeds 0 \
+  --epochs 50 \
+  --learning-rate 0.01 \
+  --weight-decay 0.0001 \
+  --random-projection-dim 256 \
+  --device cuda
+```
+
+The runner reads only the requested tensors, mean-pools the same 576 patches at
+each stage, standardizes features using development-training statistics only,
+masks `guess`/`not visible`/missing labels, and selects every F1 threshold using
+training scores only. It reports per-attribute AUROC/F1 and macro summaries.
+The prevalence, independently shuffled-label, and 256-dimensional Gaussian
+projection runs test trivial class balance, label leakage, and feature-dimension
+confounding respectively.
+
+Inspect `attribute_probe_by_stage.csv` before starting the full nine-stage,
+three-seed run. In particular, verify that outputs are finite, shuffled-label
+performance is not suspiciously strong, and the primary results are not merely
+the prevalence baseline. Do not interpret 50-epoch, one-seed smoke numbers as
+scientific results.
+
 ## Outputs to download
 
 ```python

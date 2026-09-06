@@ -341,10 +341,10 @@ parts.
 | Corrected qualitative figures | Complete | Reviewed 20 deliberately selected low-attention/concept-overlap disagreement cases |
 | Full Phase 01 sanity gate | **PASS WITH ANOMALY** | All 16 blocking checks passed; the strong Top-K box concentration/weak Vision-CLS top-1 pointing mismatch remains explicit |
 
-The local software suite passes 53 tests after the hardened sanity gate,
-Phase 02 smoke implementation, and production sharding/resumption extension.
-The scientific decision additionally rests on the corrected Kaggle artifacts
-and qualitative review described below.
+The local software suite passes 59 tests after the hardened sanity gate,
+Phase 02 smoke and production sharding/resumption work, and the bounded Phase 03
+probe-smoke implementation. The scientific decision additionally rests on the
+corrected Kaggle artifacts and qualitative review described below.
 
 ## 6. Corrected Phase 01B results
 
@@ -529,8 +529,9 @@ The schema preserves explicit spatial-token correspondence across stages. The
 one-image smoke passed with 1,024-dimensional vision states, 4,096-dimensional
 language states, 2,051,509,760 peak allocated GPU bytes, and a 7,300,734,000-byte
 projection for 240 images. Production storage is therefore frozen as twelve
-indexed 20-image safetensors shards. The full development-pilot extraction and
-independent reload validation remain to be run on Kaggle.
+indexed 20-image safetensors shards. The full development-pilot extraction then
+completed at 7,322,561,356 bytes, and independent validation passed all 240
+records with the frozen 160/80 split and zero official-test images.
 
 ### 8.4 Experiment 1: attribute recoverability trajectory
 
@@ -644,9 +645,10 @@ PYTHONPATH=src python scripts/write_phase1_sanity_report.py \
 ```
 
 The generated report passed with the documented pointing anomaly. The Phase 2
-one-image smoke subsequently passed its alignment, storage, and GPU checks, so
-the sharded 240-image development-pilot extraction is now authorized. The
-official CUB test split remains untouched until the complete protocol is frozen.
+one-image smoke and sharded 240-image development extraction subsequently
+passed their alignment, storage, identity, and reload checks. A bounded Phase 3
+attribute-probe smoke is therefore authorized. The official CUB test split
+remains untouched until the complete protocol is frozen.
 
 ## 12. Conclusion
 

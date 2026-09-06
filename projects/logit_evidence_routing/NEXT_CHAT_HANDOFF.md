@@ -6,7 +6,8 @@
 **Repository branch:** `feat/iclr`  
 **Project directory:** `projects/logit_evidence_routing`  
 **Phase 2 implementation commit:** `faf49e1f01b64c607e0dd6a20de58ed0117638ce`<br>
-**Phase 2 production-cache commit:** `4b4e8ce2637b71e9a9d5e50cee6882749d90a99f`
+**Phase 2 production-cache commit:** `4b4e8ce2637b71e9a9d5e50cee6882749d90a99f`<br>
+**Phase 3 probe-smoke commit:** `0b61b6d594ad661530792e49f645adbcaa8e273d`
 
 ## Copy-paste prompt for the next chat
 
@@ -39,12 +40,13 @@ reviewed, and the formal report has been updated.
 
 Immediate objective:
 1. Fetch the latest `feat/iclr` branch in Kaggle.
-2. Run `extract_phase2_stage_cache.py` on the frozen 240-image development
-   pilot, using the already-passing smoke directory and its exact settings.
-3. If the all-pilot attribute audit reports a requested malformed row, stop and
-   replace the damaged Kaggle dataset copy; never reinterpret the extra field.
-4. Resume the same command as needed until twelve shards and 240 records finish.
-5. Run `validate_phase2_stage_cache.py` and proceed only if its report is `PASS`.
+2. Run the six focused `test_attribute_probe.py` tests on Kaggle.
+3. Run `run_phase3_attribute_probes.py` as a one-seed, 50-epoch smoke on
+   `vision.final`, `projector.output`, and `llm.final`, with primary,
+   prevalence, shuffled-label, and random-projection controls.
+4. Inspect macro and per-attribute results for finiteness, leakage-like shuffled
+   performance, class-balance failure, and optimizer failure.
+5. Stop before the full nine-stage run and report the smoke tables.
 
 Keep the VLM frozen. Treat attention, linear accessibility, semantic readability,
 and causal utilization as distinct measurements. Logit Lens is one diagnostic,
@@ -90,12 +92,13 @@ At preparation time:
 branch: feat/iclr
 Phase 2 implementation: faf49e1 Implement Phase 2 stage-aligned cache smoke
 Phase 2 production cache: 4b4e8ce Implement sharded Phase 2 pilot cache
+Phase 3 probe smoke: 0b61b6d Implement Phase 3 attribute probe smoke
 remote: origin/feat/iclr contains this commit
 ```
 
-The Phase 2 production implementation is committed. The working tree should be
+The Phase 3 smoke implementation is committed. The working tree should be
 clean unless the user has made newer changes; preserve any such changes. The
-local test suite currently passes all 53 tests.
+local test suite currently passes all 59 tests.
 
 ## 3. Completed implementation
 
@@ -122,7 +125,10 @@ The repository currently provides:
   projection;
 - deterministic 20-image safetensors production shards;
 - prefix-only resumption, per-shard atomic writes, reload validation, hashes,
-  and an independent full-cache validator.
+  and an independent full-cache validator;
+- a selective safetensors stage reader and masked multi-label attribute probe;
+- training-only standardization/F1 thresholds plus prevalence, shuffled-label,
+  and matched random-projection controls.
 
 Important implementation entry points:
 
@@ -136,6 +142,7 @@ Important implementation entry points:
 - [`scripts/smoke_stage_cache.py`](scripts/smoke_stage_cache.py)
 - [`scripts/extract_phase2_stage_cache.py`](scripts/extract_phase2_stage_cache.py)
 - [`scripts/validate_phase2_stage_cache.py`](scripts/validate_phase2_stage_cache.py)
+- [`scripts/run_phase3_attribute_probes.py`](scripts/run_phase3_attribute_probes.py)
 - [`src/lger/hf_llava.py`](src/lger/hf_llava.py)
 - [`src/lger/hf_stage_cache.py`](src/lger/hf_stage_cache.py)
 - [`src/lger/stage_cache.py`](src/lger/stage_cache.py)
@@ -321,10 +328,10 @@ Required correction checks:
 - corrected localization interpretation;
 - updated [`reports/PHASE_01B_TECHNICAL_REPORT.md`](reports/PHASE_01B_TECHNICAL_REPORT.md).
 
-## 6. Gate 2 status: smoke passed; production extraction ready
+## 6. Gate 2 status: complete
 
-Gate 1 passed and the real Kaggle one-image smoke passed. The next gate is the
-complete, independently validated 240-image development cache.
+Gate 1 passed, the real Kaggle one-image smoke passed, and the complete 240-image
+development cache independently validated.
 
 ### Step 1: schema — complete
 
@@ -361,8 +368,8 @@ The Kaggle CUB copy at `wenewone/cub2002011` contains 606 six-field annotation
 rows, but none belongs to the 160 development-training IDs used for attribute
 selection. Filtered loading now applies the requested image-ID scope before
 validating row shape: out-of-scope damage is ignored, while a malformed row for
-any requested image remains a hard failure. Audit all 240 pilot IDs before a
-future full-cache extraction.
+any requested image remains a hard failure. The successful full extraction
+confirms that none of the 606 damaged rows belongs to the 240 pilot IDs.
 
 No class descriptions or attribute-to-part mappings were inferred from
 validation results.
@@ -388,7 +395,7 @@ Implemented invariants:
 
 ### Step 4: Kaggle smoke and tests — passed
 
-All 53 local tests pass. Coverage includes schema validation, stage naming,
+All 59 local tests pass. Coverage includes schema validation, stage naming,
 layer resolution, spatial mapping, atomic resumption, finite values, raw
 answer-logit alignment, record packing, deterministic shard planning, and a
 dependency-free mocked shard write/reload cycle.
@@ -401,13 +408,13 @@ The accepted Kaggle smoke reported:
 - projected 240-image cache size: 7,300,734,000 bytes;
 - reload validation: nine aligned stages, `PASS`.
 
-### Step 5: production extraction — ready for Kaggle
+### Step 5: production extraction — complete
 
-Run the command documented in `README.md`. It first audits all 240 requested
-attribute rows, refuses official-test images, verifies the exact smoke config,
-checks disk/GPU margins, then writes and reload-validates each shard before
-updating the resumable index. After completion, run the independent validator.
-Do not begin Phase 3 unless `validation_report.json` passes.
+The completed cache contains 240 records in twelve shards and occupies
+7,322,561,356 bytes. Independent validation reloaded all records and confirmed
+160 training images, 80 validation images, nine aligned stages, 576 patches,
+1,024-dimensional vision states, 4,096-dimensional language states, and zero
+official-test images. Validation status is `PASS`.
 
 ## 7. Main experiments after the stage cache
 
@@ -426,6 +433,13 @@ figures/attribute_probe_by_stage.png
 ```
 
 Primary question: where is the largest change in linear accessibility?
+
+The Phase 3 runner is implemented but only a bounded smoke is authorized next.
+It reads requested tensors without loading answer logits; masks uncertain and
+missing targets; fits the same multi-label linear probe; chooses thresholds on
+training scores only; and reports primary, prevalence, shuffled-label, and
+random-projection controls. Run the exact smoke command in `README.md`, inspect
+its tables, and stop before the nine-stage three-seed trajectory.
 
 ### Experiment 2: spatial versus semantic localization
 
@@ -498,27 +512,26 @@ The next chat should complete one of these bounded outcomes:
 
 ### Preferred outcome
 
-- production-cache commit fetched into Kaggle;
-- all 240 development images extracted into twelve resumable shards;
-- every shard saved, reloaded, schema-validated, and hash-indexed;
-- independent validation reports 240 records, a 160/80 split, nine stages per
-  record, and zero official-test images;
-- extraction runtime, final bytes, and peak memory reported;
-- work stopped before Phase 3 probe training.
+- Phase 3 probe-smoke commit fetched into Kaggle;
+- six focused attribute-probe tests pass;
+- one seed and 50 epochs run on the vision-final, projector-output, and LLM-final
+  boundaries with all four controls;
+- macro and per-attribute tables are reviewed for optimization and leakage
+  failures;
+- work stops before the full nine-stage, three-seed trajectory.
 
 ### Valid blocked outcome
 
-- Kaggle/model/dataset incompatibility identified precisely;
+- Kaggle/cache/probe incompatibility identified precisely;
 - exact failing invariant and recovery command supplied;
-- no damaged or partial shard admitted to the index;
+- no incomplete Phase 3 table treated as a result;
 - blocker and required artifact stated clearly.
 
 ### Valid stop outcome
 
-- the all-pilot annotation audit finds a malformed requested row, disk/GPU
-  margins fail, or a shard fails reload/hash validation;
+- the cache reader, masked targets, optimization, or controls fail validation;
 - root cause is diagnosed or narrowed;
-- Phase 3 and the official test split are not started.
+- the full Phase 3 trajectory and official test split are not started.
 
 ## 11. Canonical references
 
