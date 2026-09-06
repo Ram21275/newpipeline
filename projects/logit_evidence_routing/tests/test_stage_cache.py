@@ -1,5 +1,7 @@
 import json
+import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,10 +14,15 @@ from lger.hf_stage_cache import HfLlavaStageExtractor
 from lger.stage_cache import (
     REQUIRED_STAGE_NAMES,
     config_digest,
+    pack_stage_record,
     patch_centers,
+    plan_pending_shards,
     resolve_stage_plan,
     stage_metadata,
+    unpack_stage_record,
+    validate_safetensors_shard,
     validate_stage_record,
+    write_safetensors_shard,
     write_or_validate_config,
 )
 
@@ -264,6 +271,99 @@ class StageCacheTests(unittest.TestCase):
             torch.arange(12, dtype=torch.float16),
         )
         self.assertEqual(result.answer_text, "mock answer")
+
+    def test_stage_record_pack_round_trip_preserves_validation(self) -> None:
+        record = mock_record()
+        packed, tensors = pack_stage_record(record, image_id=17)
+        self.assertTrue(tensors)
+        self.assertTrue(all(key.startswith("image/00017/") for key in tensors))
+        restored = unpack_stage_record(packed, tensors)
+        validation = validate_stage_record(
+            restored, expected_config_digest="digest"
+        )
+        self.assertEqual(validation["stage_count"], 9)
+        torch.testing.assert_close(
+            restored["stages"]["llm.final"], record["stages"]["llm.final"]
+        )
+
+        missing = dict(tensors)
+        missing.pop(next(iter(missing)))
+        with self.assertRaisesRegex(RuntimeError, "tensor set differs"):
+            unpack_stage_record(packed, missing)
+
+    def test_pending_shard_plan_requires_prefix_resumption(self) -> None:
+        self.assertEqual(
+            plan_pending_shards(
+                [10, 20, 30, 40, 50], {10, 20}, shard_size=2
+            ),
+            [[30, 40], [50]],
+        )
+        with self.assertRaisesRegex(RuntimeError, "deterministic manifest prefix"):
+            plan_pending_shards([10, 20, 30], {10, 30}, shard_size=2)
+
+    def test_shard_write_and_reload_contract_without_external_runtime(self) -> None:
+        class FakeSafeOpen:
+            def __init__(self, path: Path, **_: object) -> None:
+                self.payload = torch.load(path, map_location="cpu", weights_only=False)
+
+            def __enter__(self) -> "FakeSafeOpen":
+                return self
+
+            def __exit__(self, *_: object) -> None:
+                return None
+
+            def metadata(self) -> dict[str, str]:
+                return self.payload["metadata"]
+
+            def keys(self) -> list[str]:
+                return list(self.payload["tensors"])
+
+            def get_tensor(self, key: str) -> torch.Tensor:
+                return self.payload["tensors"][key]
+
+        def fake_save_file(
+            tensors: dict[str, torch.Tensor],
+            path: str,
+            *,
+            metadata: dict[str, str],
+        ) -> None:
+            torch.save({"tensors": tensors, "metadata": metadata}, path)
+
+        package = types.ModuleType("safetensors")
+        package.safe_open = FakeSafeOpen
+        torch_module = types.ModuleType("safetensors.torch")
+        torch_module.save_file = fake_save_file
+        previous = {
+            name: sys.modules.get(name) for name in ("safetensors", "safetensors.torch")
+        }
+        sys.modules["safetensors"] = package
+        sys.modules["safetensors.torch"] = torch_module
+        try:
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                tensor_path = root / "stage-00000.safetensors"
+                metadata_path = root / "stage-00000.json"
+                record = mock_record()
+                record["image"]["image_id"] = 17
+                write_safetensors_shard(
+                    [(17, record)],
+                    tensor_path=tensor_path,
+                    metadata_path=metadata_path,
+                    expected_config_digest="digest",
+                )
+                validations = validate_safetensors_shard(
+                    tensor_path,
+                    metadata_path,
+                    expected_config_digest="digest",
+                )
+                self.assertEqual(len(validations), 1)
+                self.assertEqual(validations[0]["stage_count"], 9)
+        finally:
+            for name, module in previous.items():
+                if module is None:
+                    sys.modules.pop(name, None)
+                else:
+                    sys.modules[name] = module
 
 
 if __name__ == "__main__":

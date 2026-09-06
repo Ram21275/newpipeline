@@ -207,12 +207,12 @@ The immediate development task after a passing report is therefore the
 stage-aligned representation-cache implementation—not another selector sweep or
 a sparse-autoencoder experiment.
 
-## Phase 2 one-image smoke test
+## Phase 2 stage-aligned cache
 
 Phase 1 passed with the documented Vision-CLS Top-K/top-1 pointing anomaly. The
-Phase 2 implementation is intentionally limited to attribute-subset selection
-from development-training annotations and one image of stage-aligned extraction.
-Its schema and acceptance checks are documented in
+Phase 2 begins with attribute-subset selection from development-training
+annotations and one image of stage-aligned extraction. Its schema and acceptance
+checks are documented in
 [`representation_cache_schema.md`](representation_cache_schema.md).
 
 After pulling the latest `feat/iclr` commit into a Kaggle GPU notebook, first
@@ -250,6 +250,51 @@ reports resolved stages, shapes, dtypes, bytes per image, projected 240-image
 storage/runtime, and peak GPU memory. The `.pt` layout is not the production
 format. Stop after this command and review `smoke_summary.json` before choosing
 the final indexed shard format or authorizing the 240-image extraction.
+
+The reviewed smoke used 1,024-dimensional vision states, 4,096-dimensional
+projector/LLM states, 2,051,509,760 peak allocated GPU bytes, and projected
+7,300,734,000 bytes for all 240 images. This passes the development-pilot gate.
+The production choice is 20-image safetensors shards with JSON reconstruction
+metadata: twelve bounded shards instead of one monolith or 240 individual files.
+
+Run the complete 160-train/80-validation development pilot with exactly the
+smoke-tested model, revision, prompt, generation length, gate, and attribute
+subset:
+
+```python
+!PYTHONPATH=src python scripts/extract_phase2_stage_cache.py \
+  --phase1-gate /kaggle/working/phase1b_corrected/results/phase1_gate.json \
+  --manifest /kaggle/working/phase1/pilot_manifest.csv \
+  --attribute-subset /kaggle/working/phase2_smoke_6ea8e34/attribute_subset.json \
+  --smoke-dir /kaggle/working/phase2_smoke_6ea8e34 \
+  --output-dir /kaggle/working/phase2_stage_cache \
+  --search-root /kaggle/input \
+  --model llava-hf/llava-1.5-7b-hf \
+  --revision b234b804b114d9e37bb655e11cbbb5f5e971b7a9 \
+  --quantization 4bit \
+  --prompt "Describe the image briefly." \
+  --max-new-tokens 32 \
+  --shard-size 20
+```
+
+Before loading the model, the command strictly parses the annotations for all
+240 requested IDs. Thus the known damaged rows in the Kaggle dataset remain
+ignored only when they are outside the pilot. Each completed shard is written
+atomically, reloaded, schema-validated, hashed, and then added to `index.json`.
+Rerunning the identical command resumes at the next whole shard; any changed
+configuration requires a new output directory.
+
+After all twelve shards complete, independently hash-check and reload all 240
+records:
+
+```python
+!PYTHONPATH=src python scripts/validate_phase2_stage_cache.py \
+  --cache-dir /kaggle/working/phase2_stage_cache
+```
+
+Proceed to Phase 3 only if `validation_report.json` reports `PASS`, 240 records,
+160/80 development splits, nine stages per record, and zero official-test
+images. The untouched official CUB test split remains reserved for Phase 8.
 
 ## Outputs to download
 

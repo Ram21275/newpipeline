@@ -1,4 +1,4 @@
-"""Schema, alignment, and atomicity helpers for the Phase 2 smoke cache."""
+"""Schema, alignment, atomicity, and sharding helpers for the Phase 2 cache."""
 
 from __future__ import annotations
 
@@ -355,3 +355,269 @@ def validate_stage_record(
         "vision_hidden_size": dimensions["vision.final"],
         "language_hidden_size": dimensions["llm.final"],
     }
+
+
+_TENSOR_REFERENCE_KEY = "__stage_cache_tensor__"
+
+
+def pack_stage_record(
+    record: dict[str, Any], *, image_id: int
+) -> tuple[dict[str, Any], dict[str, torch.Tensor]]:
+    """Split one nested record into JSON metadata and safetensors-ready tensors.
+
+    Tensor names are namespaced by image ID and structural path, which keeps the
+    production shards self-describing without relying on insertion order.
+    """
+
+    if image_id <= 0:
+        raise ValueError("image_id must be positive")
+    tensors: dict[str, torch.Tensor] = {}
+    prefix = f"image/{image_id:05d}"
+
+    def visit(value: Any, path: tuple[str, ...]) -> Any:
+        if isinstance(value, torch.Tensor):
+            if not path:
+                raise ValueError("a stage record cannot be a bare tensor")
+            tensor_key = "/".join((prefix, *path))
+            if tensor_key in tensors:
+                raise ValueError(f"duplicate packed tensor key: {tensor_key}")
+            tensors[tensor_key] = value.detach().cpu().contiguous()
+            return {_TENSOR_REFERENCE_KEY: tensor_key}
+        if isinstance(value, dict):
+            if any(not isinstance(key, str) for key in value):
+                raise TypeError("stage-record dictionaries require string keys")
+            return {key: visit(item, (*path, key)) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [visit(item, (*path, str(index))) for index, item in enumerate(value)]
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        raise TypeError(f"unsupported stage-record value at {'/'.join(path)}: {type(value)}")
+
+    packed = visit(record, ())
+    if not isinstance(packed, dict) or not tensors:
+        raise ValueError("packed stage record is empty or contains no tensors")
+    return packed, tensors
+
+
+def packed_tensor_keys(packed_record: dict[str, Any]) -> set[str]:
+    """Return every tensor reference embedded in packed record metadata."""
+
+    keys: set[str] = set()
+
+    def visit(value: Any) -> None:
+        if isinstance(value, dict):
+            if set(value) == {_TENSOR_REFERENCE_KEY}:
+                key = value[_TENSOR_REFERENCE_KEY]
+                if not isinstance(key, str) or not key:
+                    raise RuntimeError("packed record contains an invalid tensor reference")
+                if key in keys:
+                    raise RuntimeError(f"packed record repeats tensor reference {key}")
+                keys.add(key)
+                return
+            for item in value.values():
+                visit(item)
+        elif isinstance(value, list):
+            for item in value:
+                visit(item)
+
+    visit(packed_record)
+    if not keys:
+        raise RuntimeError("packed record does not reference any tensors")
+    return keys
+
+
+def unpack_stage_record(
+    packed_record: dict[str, Any], tensors: dict[str, torch.Tensor]
+) -> dict[str, Any]:
+    """Reconstruct a stage record and reject missing or surplus tensors."""
+
+    expected = packed_tensor_keys(packed_record)
+    actual = set(tensors)
+    if actual != expected:
+        missing = sorted(expected - actual)
+        surplus = sorted(actual - expected)
+        raise RuntimeError(
+            f"packed tensor set differs (missing={missing[:3]}, surplus={surplus[:3]})"
+        )
+
+    def visit(value: Any) -> Any:
+        if isinstance(value, dict):
+            if set(value) == {_TENSOR_REFERENCE_KEY}:
+                return tensors[value[_TENSOR_REFERENCE_KEY]]
+            return {key: visit(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [visit(item) for item in value]
+        return value
+
+    unpacked = visit(packed_record)
+    if not isinstance(unpacked, dict):
+        raise RuntimeError("unpacked stage record is not a dictionary")
+    return unpacked
+
+
+def plan_pending_shards(
+    ordered_image_ids: list[int],
+    completed_image_ids: set[int],
+    *,
+    shard_size: int,
+) -> list[list[int]]:
+    """Plan deterministic remaining shards for prefix-only resumable extraction."""
+
+    if shard_size <= 0:
+        raise ValueError("shard_size must be positive")
+    if len(set(ordered_image_ids)) != len(ordered_image_ids):
+        raise ValueError("ordered image IDs contain duplicates")
+    if not completed_image_ids.issubset(ordered_image_ids):
+        raise RuntimeError("cache index contains image IDs outside the manifest")
+    prefix = set(ordered_image_ids[: len(completed_image_ids)])
+    if completed_image_ids != prefix:
+        raise RuntimeError("completed images are not a deterministic manifest prefix")
+    remaining = ordered_image_ids[len(completed_image_ids) :]
+    return [
+        remaining[offset : offset + shard_size]
+        for offset in range(0, len(remaining), shard_size)
+    ]
+
+
+def write_safetensors_shard(
+    records: list[tuple[int, dict[str, Any]]],
+    *,
+    tensor_path: Path,
+    metadata_path: Path,
+    expected_config_digest: str,
+) -> dict[str, Any]:
+    """Atomically write one production shard and its JSON reconstruction map."""
+
+    if not records:
+        raise ValueError("cannot write an empty stage-cache shard")
+    try:
+        from safetensors.torch import save_file
+    except ImportError as error:  # pragma: no cover - Kaggle dependency guard
+        raise RuntimeError(
+            "Production stage shards require safetensors; install requirements-kaggle.txt"
+        ) from error
+
+    image_ids = [image_id for image_id, _ in records]
+    if len(set(image_ids)) != len(image_ids):
+        raise ValueError("a stage-cache shard cannot contain duplicate image IDs")
+    packed_records: list[dict[str, Any]] = []
+    tensors: dict[str, torch.Tensor] = {}
+    for image_id, record in records:
+        image = record.get("image")
+        if (
+            not isinstance(image, dict)
+            or int(image.get("image_id", 0)) != image_id
+        ):
+            raise RuntimeError("record image identity differs from its shard key")
+        validation = validate_stage_record(
+            record, expected_config_digest=expected_config_digest
+        )
+        packed, record_tensors = pack_stage_record(record, image_id=image_id)
+        overlap = set(tensors).intersection(record_tensors)
+        if overlap:
+            raise RuntimeError(f"duplicate tensor names across records: {sorted(overlap)[:3]}")
+        tensors.update(record_tensors)
+        packed_records.append(
+            {
+                "image_id": image_id,
+                "validation": validation,
+                "packed_record": packed,
+            }
+        )
+
+    tensor_path.parent.mkdir(parents=True, exist_ok=True)
+    tensor_temporary = tensor_path.with_suffix(tensor_path.suffix + ".tmp")
+    save_file(
+        tensors,
+        str(tensor_temporary),
+        metadata={
+            "schema_version": str(SCHEMA_VERSION),
+            "config_digest": expected_config_digest,
+            "image_ids": ",".join(str(value) for value in image_ids),
+        },
+    )
+    tensor_temporary.replace(tensor_path)
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "complete": True,
+        "config_digest": expected_config_digest,
+        "tensor_file": tensor_path.name,
+        "image_ids": image_ids,
+        "records": packed_records,
+    }
+    atomic_json_write(payload, metadata_path)
+    return payload
+
+
+def validate_safetensors_shard(
+    tensor_path: Path,
+    metadata_path: Path,
+    *,
+    expected_config_digest: str,
+) -> list[dict[str, object]]:
+    """Reload every record in one shard and re-run the full schema validator."""
+
+    try:
+        from safetensors import safe_open
+    except ImportError as error:  # pragma: no cover - Kaggle dependency guard
+        raise RuntimeError(
+            "Production stage shards require safetensors; install requirements-kaggle.txt"
+        ) from error
+    payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if (
+        int(payload.get("schema_version", 0)) != SCHEMA_VERSION
+        or payload.get("complete") is not True
+        or payload.get("config_digest") != expected_config_digest
+        or payload.get("tensor_file") != tensor_path.name
+    ):
+        raise RuntimeError(f"stage shard metadata is incomplete or incompatible: {metadata_path}")
+    packed_records = payload.get("records")
+    image_ids = payload.get("image_ids")
+    if (
+        not isinstance(packed_records, list)
+        or not packed_records
+        or not isinstance(image_ids, list)
+        or [int(item.get("image_id", 0)) for item in packed_records]
+        != [int(value) for value in image_ids]
+    ):
+        raise RuntimeError(f"stage shard record index is malformed: {metadata_path}")
+
+    validations: list[dict[str, object]] = []
+    with safe_open(tensor_path, framework="pt", device="cpu") as handle:
+        header = handle.metadata() or {}
+        if (
+            header.get("schema_version") != str(SCHEMA_VERSION)
+            or header.get("config_digest") != expected_config_digest
+            or header.get("image_ids")
+            != ",".join(str(int(value)) for value in image_ids)
+        ):
+            raise RuntimeError(f"safetensors header is incompatible: {tensor_path}")
+        expected_keys: set[str] = set()
+        for item in packed_records:
+            packed = item.get("packed_record")
+            if not isinstance(packed, dict):
+                raise RuntimeError("stage shard contains malformed packed metadata")
+            record_keys = packed_tensor_keys(packed)
+            if expected_keys.intersection(record_keys):
+                raise RuntimeError("stage shard repeats tensor keys across records")
+            expected_keys.update(record_keys)
+        if set(handle.keys()) != expected_keys:
+            raise RuntimeError("safetensors keys do not match shard metadata")
+        for item in packed_records:
+            packed = item["packed_record"]
+            record_keys = packed_tensor_keys(packed)
+            tensors = {key: handle.get_tensor(key) for key in record_keys}
+            record = unpack_stage_record(packed, tensors)
+            image = record.get("image")
+            if (
+                not isinstance(image, dict)
+                or int(image.get("image_id", 0)) != int(item["image_id"])
+            ):
+                raise RuntimeError("stage shard image identity does not round-trip")
+            validation = validate_stage_record(
+                record, expected_config_digest=expected_config_digest
+            )
+            if validation != item.get("validation"):
+                raise RuntimeError("stage shard validation changed after reload")
+            validations.append(validation)
+    return validations

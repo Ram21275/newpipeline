@@ -1,8 +1,8 @@
 # Stage-Aligned Representation Cache Schema
 
 **Schema version:** 1
-**Status:** one-image sizing/smoke schema; the final shard format remains gated
-on measured bytes per image, reload behavior, and Kaggle memory use.
+**Status:** smoke accepted; production format frozen as indexed 20-image
+safetensors shards with JSON reconstruction metadata.
 
 ## Purpose and evidence boundary
 
@@ -39,7 +39,7 @@ Every run configuration records:
   settings from the loaded image processor;
 - exact resolved hidden-state indices and vision feature-selection strategy;
 - annotation and uncertainty policy;
-- smoke storage format.
+- smoke and production storage formats.
 
 Resumption compares the entire canonical JSON configuration. Any mismatch
 requires a new output directory. Existing incomplete or mismatched records are
@@ -182,3 +182,41 @@ The smoke run passes only if:
 
 Stop after this smoke run. The 240-image extraction requires a reviewed smoke
 summary and an explicit production shard-format decision.
+
+## Production shard decision
+
+The accepted Kaggle smoke measured:
+
+- vision hidden size: 1,024;
+- projector/LLM hidden size: 4,096;
+- peak allocated GPU memory: 2,051,509,760 bytes;
+- projected 240-image `.pt` sizing footprint: 7,300,734,000 bytes.
+
+The production cache uses twelve 20-image safetensors shards. Each tensor key is
+namespaced by image ID and its structural record path. A companion JSON file
+contains all non-tensor metadata plus exact tensor references, allowing the
+original validated nested record to be reconstructed without pickle. The
+layout is:
+
+```text
+phase2_stage_cache/
+  run_config.json
+  index.json
+  extraction_summary.json
+  validation_report.json
+  shards/
+    stage-00000-of-00012.safetensors
+    stage-00000-of-00012.json
+    ...
+```
+
+The extractor audits all 240 requested CUB attribute rows before model loading,
+rejects any official-test image, and requires the exact smoke-tested gate,
+attribute subset, model revision, prompt, and generation settings. A shard is
+saved through an adjacent temporary tensor file, reloaded, fully validated, and
+hashed before its records enter the atomic index. Resumption is allowed only for
+a deterministic prefix of the manifest under an identical canonical config.
+
+The independent validator verifies shard hashes, reconstructs and validates all
+240 records, checks the 160/80 development split, confirms all nine stages, and
+asserts that the official CUB test split remains untouched.
