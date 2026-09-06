@@ -2,10 +2,10 @@
 
 **Project:** Fine-Grained Evidence Tracing in Vision-Language Models  
 **Target:** ICLR 2027  
-**Prepared:** 5 September 2026  
+**Updated:** 6 September 2026<br>
 **Repository branch:** `feat/iclr`  
 **Project directory:** `projects/logit_evidence_routing`  
-**Current checked-out commit:** `7c4a27ed822b2fd424ab43b721965154bec62b68`
+**Phase 2 implementation commit:** `faf49e1f01b64c607e0dd6a20de58ed0117638ce`
 
 ## Copy-paste prompt for the next chat
 
@@ -29,8 +29,9 @@ First read, in order:
 5. projects/logit_evidence_routing/planning/01_SIGNAL_VALIDATION.md
 6. projects/logit_evidence_routing/planning/02_DATA_AND_CACHE_PIPELINE.md
 
-Start with `git status --short --branch` and preserve all existing uncommitted
-changes. Phase 01 has been independently audited and is **PASS WITH ANOMALY**.
+Start with `git status --short --branch`, fetch `origin/feat/iclr`, and preserve
+any newer user changes. Phase 01 has been independently audited and is
+**PASS WITH ANOMALY**.
 The corrected bundle uses lexical bird/birds token IDs 11199/17952 and excludes
 legacy whitespace token 29871. The 20 qualitative disagreement panels have been
 reviewed, and the formal report has been updated.
@@ -38,8 +39,7 @@ reviewed, and the formal report has been updated.
 Immediate objective:
 1. Review the implemented Phase 2 schema, CUB attribute loader, stage resolver,
    atomic cache helpers, and one-image Kaggle smoke script.
-2. Commit and push the Phase 2 implementation, then fetch the latest
-   `feat/iclr` branch in Kaggle.
+2. Fetch the latest `feat/iclr` branch in Kaggle.
 3. Generate `attribute_subset.json` from development-training labels only.
 4. Run `smoke_stage_cache.py` for exactly one image.
 5. Inspect resolved stage indices, tensor shapes/dtypes, answer alignment,
@@ -88,29 +88,13 @@ At preparation time:
 
 ```text
 branch: feat/iclr
-HEAD:   7c4a27e Harden Phase 01 sanity gate
-remote: origin/feat/iclr at the same commit
+Phase 2 implementation: faf49e1 Implement Phase 2 stage-aligned cache smoke
+remote: origin/feat/iclr contains this commit
 ```
 
-The working tree contains intentional uncommitted Phase 2 work:
-
-```text
-M  projects/logit_evidence_routing/NEXT_CHAT_HANDOFF.md
-M  projects/logit_evidence_routing/README.md
-M  projects/logit_evidence_routing/reports/PHASE_01B_TECHNICAL_REPORT.md
-M  projects/logit_evidence_routing/src/lger/cub.py
-M  projects/logit_evidence_routing/tests/test_cub.py
-?? projects/logit_evidence_routing/configs/phase2_attribute_groups.json
-?? projects/logit_evidence_routing/representation_cache_schema.md
-?? projects/logit_evidence_routing/scripts/select_phase2_attributes.py
-?? projects/logit_evidence_routing/scripts/smoke_stage_cache.py
-?? projects/logit_evidence_routing/src/lger/hf_stage_cache.py
-?? projects/logit_evidence_routing/src/lger/stage_cache.py
-?? projects/logit_evidence_routing/tests/test_stage_cache.py
-```
-
-The next chat must inspect and preserve these files. Do not reset or overwrite
-them. The local test suite currently passes all 49 tests.
+The Phase 2 implementation is committed and pushed. The working tree should be
+clean unless the user has made newer changes; preserve any such changes. The
+local test suite currently passes all 49 tests.
 
 ## 3. Completed implementation
 
