@@ -341,9 +341,10 @@ parts.
 | Corrected qualitative figures | Complete | Reviewed 20 deliberately selected low-attention/concept-overlap disagreement cases |
 | Full Phase 01 sanity gate | **PASS WITH ANOMALY** | All 16 blocking checks passed; the strong Top-K box concentration/weak Vision-CLS top-1 pointing mismatch remains explicit |
 
-The local software suite passes 50 tests after the hardened sanity gate and
-initial Phase 02 smoke implementation. The scientific decision additionally rests on the corrected
-Kaggle artifacts and qualitative review described below.
+The local software suite passes 53 tests after the hardened sanity gate,
+Phase 02 smoke implementation, and production sharding/resumption extension.
+The scientific decision additionally rests on the corrected Kaggle artifacts
+and qualitative review described below.
 
 ## 6. Corrected Phase 01B results
 
@@ -524,9 +525,12 @@ Build one resumable extraction pass for the existing 240-image pilot. Store:
   coordinates, crop mapping, exact layer indices, shapes, and dtypes;
 - model revision, code commit, prompt, preprocessing, runtime, and peak memory.
 
-The schema must preserve or explicitly describe spatial-token correspondence
-across stages. A smoke test on one image and a storage/runtime estimate precede
-the full pilot extraction.
+The schema preserves explicit spatial-token correspondence across stages. The
+one-image smoke passed with 1,024-dimensional vision states, 4,096-dimensional
+language states, 2,051,509,760 peak allocated GPU bytes, and a 7,300,734,000-byte
+projection for 240 images. Production storage is therefore frozen as twelve
+indexed 20-image safetensors shards. The full development-pilot extraction and
+independent reload validation remain to be run on Kaggle.
 
 ### 8.4 Experiment 1: attribute recoverability trajectory
 
@@ -639,10 +643,10 @@ PYTHONPATH=src python scripts/write_phase1_sanity_report.py \
   --search-root /kaggle/input
 ```
 
-The generated report passed with the documented pointing anomaly. Phase 2 may
-therefore begin with schema validation and a one-image smoke test. Do not launch
-the 240-image extraction until its alignment, resumption, storage, runtime, and
-memory checks pass.
+The generated report passed with the documented pointing anomaly. The Phase 2
+one-image smoke subsequently passed its alignment, storage, and GPU checks, so
+the sharded 240-image development-pilot extraction is now authorized. The
+official CUB test split remains untouched until the complete protocol is frozen.
 
 ## 12. Conclusion
 

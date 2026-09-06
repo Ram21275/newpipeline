@@ -5,7 +5,8 @@
 **Updated:** 6 September 2026<br>
 **Repository branch:** `feat/iclr`  
 **Project directory:** `projects/logit_evidence_routing`  
-**Phase 2 implementation commit:** `faf49e1f01b64c607e0dd6a20de58ed0117638ce`
+**Phase 2 implementation commit:** `faf49e1f01b64c607e0dd6a20de58ed0117638ce`<br>
+**Phase 2 production-cache commit:** `4b4e8ce2637b71e9a9d5e50cee6882749d90a99f`
 
 ## Copy-paste prompt for the next chat
 
@@ -37,14 +38,13 @@ legacy whitespace token 29871. The 20 qualitative disagreement panels have been
 reviewed, and the formal report has been updated.
 
 Immediate objective:
-1. Review the implemented Phase 2 schema, CUB attribute loader, stage resolver,
-   atomic cache helpers, and one-image Kaggle smoke script.
-2. Fetch the latest `feat/iclr` branch in Kaggle.
-3. Generate `attribute_subset.json` from development-training labels only.
-4. Run `smoke_stage_cache.py` for exactly one image.
-5. Inspect resolved stage indices, tensor shapes/dtypes, answer alignment,
-   bytes/image, projected 240-image storage/runtime, peak GPU memory, and reload
-   validation. Do not launch the 240-image extraction.
+1. Fetch the latest `feat/iclr` branch in Kaggle.
+2. Run `extract_phase2_stage_cache.py` on the frozen 240-image development
+   pilot, using the already-passing smoke directory and its exact settings.
+3. If the all-pilot attribute audit reports a requested malformed row, stop and
+   replace the damaged Kaggle dataset copy; never reinterpret the extra field.
+4. Resume the same command as needed until twelve shards and 240 records finish.
+5. Run `validate_phase2_stage_cache.py` and proceed only if its report is `PASS`.
 
 Keep the VLM frozen. Treat attention, linear accessibility, semantic readability,
 and causal utilization as distinct measurements. Logit Lens is one diagnostic,
@@ -89,12 +89,13 @@ At preparation time:
 ```text
 branch: feat/iclr
 Phase 2 implementation: faf49e1 Implement Phase 2 stage-aligned cache smoke
+Phase 2 production cache: 4b4e8ce Implement sharded Phase 2 pilot cache
 remote: origin/feat/iclr contains this commit
 ```
 
-The Phase 2 implementation is committed and pushed. The working tree should be
+The Phase 2 production implementation is committed. The working tree should be
 clean unless the user has made newer changes; preserve any such changes. The
-local test suite currently passes all 50 tests.
+local test suite currently passes all 53 tests.
 
 ## 3. Completed implementation
 
@@ -118,7 +119,10 @@ The repository currently provides:
 - development-training-only attribute-family selection;
 - resolved vision/projector/LLM stage capture during frozen generation;
 - atomic one-image smoke-cache writing, reload validation, and storage/runtime
-  projection.
+  projection;
+- deterministic 20-image safetensors production shards;
+- prefix-only resumption, per-shard atomic writes, reload validation, hashes,
+  and an independent full-cache validator.
 
 Important implementation entry points:
 
@@ -130,6 +134,8 @@ Important implementation entry points:
 - [`scripts/write_phase1_sanity_report.py`](scripts/write_phase1_sanity_report.py)
 - [`scripts/select_phase2_attributes.py`](scripts/select_phase2_attributes.py)
 - [`scripts/smoke_stage_cache.py`](scripts/smoke_stage_cache.py)
+- [`scripts/extract_phase2_stage_cache.py`](scripts/extract_phase2_stage_cache.py)
+- [`scripts/validate_phase2_stage_cache.py`](scripts/validate_phase2_stage_cache.py)
 - [`src/lger/hf_llava.py`](src/lger/hf_llava.py)
 - [`src/lger/hf_stage_cache.py`](src/lger/hf_stage_cache.py)
 - [`src/lger/stage_cache.py`](src/lger/stage_cache.py)
@@ -315,10 +321,10 @@ Required correction checks:
 - corrected localization interpretation;
 - updated [`reports/PHASE_01B_TECHNICAL_REPORT.md`](reports/PHASE_01B_TECHNICAL_REPORT.md).
 
-## 6. Gate 2 status: stage-aligned representation-cache smoke
+## 6. Gate 2 status: smoke passed; production extraction ready
 
-Gate 1 has passed. The schema and one-image implementation are complete locally;
-the real Kaggle GPU smoke remains the next gate.
+Gate 1 passed and the real Kaggle one-image smoke passed. The next gate is the
+complete, independently validated 240-image development cache.
 
 ### Step 1: schema — complete
 
@@ -336,10 +342,9 @@ the real Kaggle GPU smoke remains the next gate.
 - shard/index layout, atomic writes, resumption rules, and full-config
   validation.
 
-The production storage format remains intentionally undecided until one-image
-sizing is measured. Prefer a
-small number of indexed shards using safetensors, HDF5, or chunked memmap. Avoid
-one monolithic file and thousands of tiny per-layer files.
+The production storage format is frozen as twelve 20-image safetensors shards
+with JSON reconstruction metadata and an atomic JSON index. This avoids both a
+single monolith and 240 individual record files.
 
 ### Step 2: official attribute pipeline — complete locally
 
@@ -362,7 +367,7 @@ future full-cache extraction.
 No class descriptions or attribute-to-part mappings were inferred from
 validation results.
 
-### Step 3: one-image stage extraction — complete locally
+### Step 3: one-image stage extraction — complete and smoke-tested
 
 The extractor resolves indices from the actual model configuration and stores:
 
@@ -381,26 +386,28 @@ Implemented invariants:
 - incomplete records are written atomically and never mistaken for complete
   records.
 
-### Step 4: tests complete; real Kaggle smoke pending
+### Step 4: Kaggle smoke and tests — passed
 
-All 49 local tests pass. Coverage includes schema validation, stage naming,
+All 53 local tests pass. Coverage includes schema validation, stage naming,
 layer resolution, spatial mapping, atomic resumption, finite values, raw
-answer-logit alignment, and mocked extraction.
+answer-logit alignment, record packing, deterministic shard planning, and a
+dependency-free mocked shard write/reload cycle.
 
-Then run one image on Kaggle and report:
+The accepted Kaggle smoke reported:
 
-- resolved stage indices;
-- shapes and dtypes;
-- bytes per image and projected 240-image storage;
-- runtime per image and projected runtime;
-- peak GPU memory;
-- successful reload and patch alignment across every stored stage.
+- vision hidden size: 1,024;
+- language hidden size: 4,096;
+- peak allocated GPU memory: 2,051,509,760 bytes;
+- projected 240-image cache size: 7,300,734,000 bytes;
+- reload validation: nine aligned stages, `PASS`.
 
-### Step 5: decision before full extraction
+### Step 5: production extraction — ready for Kaggle
 
-Only after the smoke test passes should the next chat provide the command for
-the 240-image development extraction. Stop and report if storage, alignment, or
-memory is unsafe.
+Run the command documented in `README.md`. It first audits all 240 requested
+attribute rows, refuses official-test images, verifies the exact smoke config,
+checks disk/GPU margins, then writes and reload-validates each shard before
+updating the resumable index. After completion, run the independent validator.
+Do not begin Phase 3 unless `validation_report.json` passes.
 
 ## 7. Main experiments after the stage cache
 
@@ -491,27 +498,27 @@ The next chat should complete one of these bounded outcomes:
 
 ### Preferred outcome
 
-- Phase 2 implementation committed and fetched into Kaggle;
-- training-only `attribute_subset.json` generated and reviewed;
-- exactly one image extracted through all nine aligned stages;
-- smoke record saved, reloaded, and validated;
-- exact stage indices, shapes, dtypes, storage, runtime, answer, and peak memory
-  reported;
-- production shard format recommended from measured evidence;
-- work stopped before the 240-image extraction.
+- production-cache commit fetched into Kaggle;
+- all 240 development images extracted into twelve resumable shards;
+- every shard saved, reloaded, schema-validated, and hash-indexed;
+- independent validation reports 240 records, a 160/80 split, nine stages per
+  record, and zero official-test images;
+- extraction runtime, final bytes, and peak memory reported;
+- work stopped before Phase 3 probe training.
 
 ### Valid blocked outcome
 
 - Kaggle/model/dataset incompatibility identified precisely;
 - exact failing invariant and recovery command supplied;
-- no 240-image extraction started;
+- no damaged or partial shard admitted to the index;
 - blocker and required artifact stated clearly.
 
 ### Valid stop outcome
 
-- one-image smoke fails alignment, finiteness, resumption, storage, or memory;
+- the all-pilot annotation audit finds a malformed requested row, disk/GPU
+  margins fail, or a shard fails reload/hash validation;
 - root cause is diagnosed or narrowed;
-- the production cache and Phase 3 are not started.
+- Phase 3 and the official test split are not started.
 
 ## 11. Canonical references
 
