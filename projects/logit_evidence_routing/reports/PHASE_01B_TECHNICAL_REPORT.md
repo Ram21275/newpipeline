@@ -2,10 +2,11 @@
 
 **Project:** Fine-Grained Evidence Tracing in Vision-Language Models  
 **Target:** ICLR 2027  
-**Status date:** 4 September 2026  
+**Status date:** 5 September 2026
 **Model:** `llava-hf/llava-1.5-7b-hf` (frozen)  
 **Dataset:** CUB-200-2011 development pilot  
-**Report status:** Development evidence; not yet a final-paper result
+**Report status:** Phase 01 gate passed with anomaly; development evidence, not
+yet a final-paper result
 
 ## Abstract
 
@@ -329,7 +330,7 @@ parts.
 
 | Work item | Status | Evidence produced |
 |---|---|---|
-| Development pilot construction | Complete; formal audit pending | 160 train and 80 validation images across 20 classes, intended to be drawn only from the official CUB training partition |
+| Development pilot construction | Complete and audited | 160 train and 80 validation images across 20 classes, all drawn from the official CUB training partition |
 | Frozen LLaVA extraction | Complete | 576 aligned late-LLM patch states per image, score maps, patch selections, metadata, and cached display images |
 | Initial Random/Attention/Logit comparison | Complete | Demonstrated that patch-selection policy materially changes linear species accessibility |
 | Expanded matched selector benchmark | Complete | Compared ten selectors or pooling controls with the same representation and probe protocol |
@@ -337,20 +338,20 @@ parts.
 | Concept-token audit | Complete | Identified non-semantic whitespace token 29871 as contaminating the original concept and fusion rows |
 | Non-destructive cache repair | Complete | Reprojected cached hidden states with lexical `bird`/`birds` tokens; no image or full-VLM rerun required |
 | Corrected probe execution | Complete | Produced corrected concept and fusion probe results shown below |
-| Corrected qualitative figures | Pending | Plot command exists; corrected-cache figures have not yet been reviewed in this report |
-| Full Phase 01 sanity gate | Pending | `phase1_sanity_report.md` must pass before stage-wise extraction begins |
+| Corrected qualitative figures | Complete | Reviewed 20 deliberately selected low-attention/concept-overlap disagreement cases |
+| Full Phase 01 sanity gate | **PASS WITH ANOMALY** | All 16 blocking checks passed; the strong Top-K box concentration/weak Vision-CLS top-1 pointing mismatch remains explicit |
 
-The local software suite passes 39 tests after the correction and sanity-report
-implementation. The scientific gate nevertheless depends on the Kaggle
-artifacts, not only on unit tests.
+The local software suite passes 49 tests after the hardened sanity gate and
+initial Phase 02 smoke implementation. The scientific decision additionally rests on the corrected
+Kaggle artifacts and qualitative review described below.
 
 ## 6. Corrected Phase 01B results
 
 ### 6.1 Linear species probe
 
-The values below are means reconstructed from the corrected Kaggle console
-output supplied on 4 September 2026. Deterministic selectors have three probe
-runs. Random selection has three selection seeds crossed with three probe seeds.
+The values below were verified against the corrected Kaggle CSV bundle supplied
+on 5 September 2026. Deterministic selectors have three probe runs. Random
+selection has three selection seeds crossed with three probe seeds.
 
 | Selector | K=16 accuracy | K=16 macro-F1 | K=32 accuracy | K=32 macro-F1 |
 |---|---:|---:|---:|---:|
@@ -383,27 +384,68 @@ runs. Random selection has three selection seeds crossed with three probe seeds.
 6. **K is method dependent.** Increasing K helps Vision-CLS and concept routing,
    has little benefit for generic confidence, and slightly hurts LLM attention.
 
-### 6.3 Valid broad-box evidence from unaffected selectors
+### 6.3 Verified broad-box localization
 
-The concept correction does not modify Random or Vision-CLS score maps. Their
-previously generated broad-box rows therefore remain valid diagnostics.
+The corrected bundle contains complete localization rows for all 80 validation
+images. The concept correction did not modify Random or Vision-CLS, while the
+concept and fusion rows below were regenerated from the repaired cache.
 
 | Selector | K | Inside bird box | Box-patch recall | Box-patch IoU | Pointing game |
 |---|---:|---:|---:|---:|---:|
 | Random | 16 | 47.4% | 2.8% | 2.7% | 42.9% |
 | Vision-CLS attention | 16 | 73.7% | 5.3% | 5.2% | 37.5% |
+| Corrected logit concept | 16 | **88.6%** | **6.6%** | **6.4%** | **80.0%** |
+| Attention-logit fusion | 16 | 65.8% | 4.5% | 4.4% | 32.5% |
 | Random | 32 | 47.1% | 5.5% | 5.1% | 42.9% |
 | Vision-CLS attention | 32 | 80.8% | 11.7% | 11.1% | 37.5% |
+| Corrected logit concept | 32 | **89.3%** | **13.2%** | **12.8%** | **80.0%** |
+| Attention-logit fusion | 32 | 78.1% | 11.3% | 10.7% | 32.5% |
 
 Vision-CLS strongly concentrates the Top-K set inside the broad bird box, but
 its highest-ranked patch is inside the box less often than the random estimate
 in this small pilot. This is a meaningful anomaly: the quality of an ordered
 top-1 location and the quality of a Top-K evidence set are not equivalent.
 
-The localization table currently downloaded outside the repository points to
-the legacy cache and still includes token 29871. Corrected `logit_concept` and
-`attention_logit_fusion` localization values must therefore not be reported
-until the corrected result bundle is verified.
+The corrected concept map is the strongest broad-box localizer in this audit.
+That is evidence of generic bird-object semantic readability in late LLM states,
+not localization of the particular crown, wing, bill, breast, or eye attribute
+that distinguishes a species. Fusion fails to improve on the concept map and
+remains an ablation.
+
+### 6.4 Visible-part and qualitative audit
+
+Vision-CLS visible-part metrics cover all 80 validation images at both K values.
+Part-patch recall rises from 19.5% at K=16 to 39.4% at K=32; any-visible-part hit
+rises from 90.0% to 100.0%. The mean distance from the top-ranked Vision-CLS
+patch to the nearest visible part remains 5.60 patch widths at both K values,
+consistent with the weak 37.5% pointing rate.
+
+All 20 qualitative panels were opened and reviewed. By construction they are
+the validation images with the lowest LLM-attention/concept Top-32 Jaccard
+overlap (0.000 to 0.049), so they are adversarial disagreement cases rather than
+a representative sample. Across birds of different sizes and backgrounds, the
+corrected concept selections generally cluster on the bird body, while LLM
+attention is often sparse or scattered into background. The fusion maps inherit
+some of that scatter. Generic maximum-probability and entropy maps are visually
+diffuse. None of these panels identifies a species-defining attribute, and the
+CUB boxes sometimes include substantial background.
+
+### 6.5 Gate decision and artifact identity
+
+The machine-readable gate reports **PASS WITH ANOMALY**, with all 16 blocking
+checks passing, zero exact duplicate global-feature groups, 160 development
+train images, 80 development validation images, and zero official test images.
+The repaired cache uses lexical tokens `bird` and `birds` with IDs 11199 and
+17952; rejected whitespace token 29871 is absent. The model revision is pinned
+to `b234b804b114d9e37bb655e11cbbb5f5e971b7a9`.
+
+Audit-file SHA-256 identities:
+
+```text
+extraction_config.json  1f34256bba5f594f14c9edcd8cc027aec06d56d8b7984de612cc3099be517848
+evaluation_config.json  a954adb445e5aa3849f7309e92f381cbe7dfa2deec1dfa23d6223fa53a451ccb
+phase1_gate.json        3404052a65dd04d956a542b3b3fbaec43115dc33a242e0166c44f5259dd90f2a
+```
 
 ## 7. What the completed study supports
 
@@ -458,9 +500,9 @@ flowchart LR
     IF --> CI[One targeted causal intervention]
 ```
 
-### 8.2 Gate 1: finish the Phase 01 audit
+### 8.2 Gate 1: Phase 01 audit — complete
 
-Before starting a new model extraction:
+Completed on 5 September 2026:
 
 1. Generate corrected qualitative figures from the corrected cache.
 2. Verify the corrected result config contains
@@ -468,8 +510,7 @@ Before starting a new model extraction:
 3. Check manifest identity, train/validation disjointness, official-split
    membership, cached-feature duplicates, visible-part proximity, and all
    required output files.
-4. Run `write_phase1_sanity_report.py` and require `PASS` or an explicitly
-   documented `PASS with anomaly` decision.
+4. Ran `write_phase1_sanity_report.py`; decision: **PASS WITH ANOMALY**.
 
 ### 8.3 Gate 2: stage-aligned representation cache
 
@@ -598,11 +639,15 @@ PYTHONPATH=src python scripts/write_phase1_sanity_report.py \
   --search-root /kaggle/input
 ```
 
-Proceed to the representation cache only if the generated report passes.
+The generated report passed with the documented pointing anomaly. Phase 2 may
+therefore begin with schema validation and a one-image smoke test. Do not launch
+the 240-image extraction until its alignment, resumption, storage, runtime, and
+memory checks pass.
 
 ## 12. Conclusion
 
-Phase 01B has established a strong but narrow observation: a small subset of
+Phase 01B has passed its development sanity gate with a documented anomaly and
+established a strong but narrow observation: a small subset of
 late LLM visual-token states, selected either by final vision CLS attention or
 by corrected generic bird-concept logit mass, supports much stronger linear
 species discrimination than random selection or global mean pooling. Generic

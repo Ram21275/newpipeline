@@ -5,7 +5,7 @@
 **Prepared:** 5 September 2026  
 **Repository branch:** `feat/iclr`  
 **Project directory:** `projects/logit_evidence_routing`  
-**Current checked-out commit:** `623f9a7ad01ed813a991a2aacd8e688aec7bf9fb`
+**Current checked-out commit:** `7c4a27ed822b2fd424ab43b721965154bec62b68`
 
 ## Copy-paste prompt for the next chat
 
@@ -30,21 +30,21 @@ First read, in order:
 6. projects/logit_evidence_routing/planning/02_DATA_AND_CACHE_PIPELINE.md
 
 Start with `git status --short --branch` and preserve all existing uncommitted
-changes. Do not begin the stage-aligned representation cache until the corrected
-Phase 01 sanity report has been generated and inspected. The currently downloaded
-localization table is from the legacy cache and contains invalid token ID 29871;
-do not use its logit_concept or attention_logit_fusion rows.
+changes. Phase 01 has been independently audited and is **PASS WITH ANOMALY**.
+The corrected bundle uses lexical bird/birds token IDs 11199/17952 and excludes
+legacy whitespace token 29871. The 20 qualitative disagreement panels have been
+reviewed, and the formal report has been updated.
 
 Immediate objective:
-1. Inspect the corrected Kaggle result bundle, including metadata, quantitative
-   localization, visible-part metrics, qualitative figures, and
-   phase1_sanity_report.md.
-2. Decide PASS, PASS WITH ANOMALY, or STOP / INVESTIGATE using the written gate.
-3. Update the formal report with only verified corrected artifacts.
-4. If and only if the gate passes, design and implement a one-image smoke test
-   for the stage-aligned representation cache. Do not launch the full 240-image
-   extraction until the schema, resumption checks, storage estimate, and tests
-   pass locally.
+1. Review the implemented Phase 2 schema, CUB attribute loader, stage resolver,
+   atomic cache helpers, and one-image Kaggle smoke script.
+2. Commit and push the Phase 2 implementation, then fetch the latest
+   `feat/iclr` branch in Kaggle.
+3. Generate `attribute_subset.json` from development-training labels only.
+4. Run `smoke_stage_cache.py` for exactly one image.
+5. Inspect resolved stage indices, tensor shapes/dtypes, answer alignment,
+   bytes/image, projected 240-image storage/runtime, peak GPU memory, and reload
+   validation. Do not launch the 240-image extraction.
 
 Keep the VLM frozen. Treat attention, linear accessibility, semantic readability,
 and causal utilization as distinct measurements. Logit Lens is one diagnostic,
@@ -88,20 +88,29 @@ At preparation time:
 
 ```text
 branch: feat/iclr
-HEAD:   623f9a7 Clarify Kaggle imports and evidence tracing roadmap
+HEAD:   7c4a27e Harden Phase 01 sanity gate
 remote: origin/feat/iclr at the same commit
 ```
 
-The working tree contains intentional uncommitted work:
+The working tree contains intentional uncommitted Phase 2 work:
 
 ```text
+M  projects/logit_evidence_routing/NEXT_CHAT_HANDOFF.md
 M  projects/logit_evidence_routing/README.md
-?? projects/logit_evidence_routing/reports/PHASE_01B_TECHNICAL_REPORT.md
-?? projects/logit_evidence_routing/NEXT_CHAT_HANDOFF.md
+M  projects/logit_evidence_routing/reports/PHASE_01B_TECHNICAL_REPORT.md
+M  projects/logit_evidence_routing/src/lger/cub.py
+M  projects/logit_evidence_routing/tests/test_cub.py
+?? projects/logit_evidence_routing/configs/phase2_attribute_groups.json
+?? projects/logit_evidence_routing/representation_cache_schema.md
+?? projects/logit_evidence_routing/scripts/select_phase2_attributes.py
+?? projects/logit_evidence_routing/scripts/smoke_stage_cache.py
+?? projects/logit_evidence_routing/src/lger/hf_stage_cache.py
+?? projects/logit_evidence_routing/src/lger/stage_cache.py
+?? projects/logit_evidence_routing/tests/test_stage_cache.py
 ```
 
 The next chat must inspect and preserve these files. Do not reset or overwrite
-them. The local test suite currently passes all 39 tests.
+them. The local test suite currently passes all 49 tests.
 
 ## 3. Completed implementation
 
@@ -120,6 +129,12 @@ The repository currently provides:
 - protection against legacy concept caches;
 - non-destructive repair of the concept-tokenization error;
 - automated Phase 01 sanity reporting.
+- a verified Phase 01 `PASS WITH ANOMALY` decision;
+- official CUB attribute vocabulary/presence/certainty loading;
+- development-training-only attribute-family selection;
+- resolved vision/projector/LLM stage capture during frozen generation;
+- atomic one-image smoke-cache writing, reload validation, and storage/runtime
+  projection.
 
 Important implementation entry points:
 
@@ -129,7 +144,11 @@ Important implementation entry points:
 - [`scripts/run_phase1b_benchmark.py`](scripts/run_phase1b_benchmark.py)
 - [`scripts/plot_phase1b_localizers.py`](scripts/plot_phase1b_localizers.py)
 - [`scripts/write_phase1_sanity_report.py`](scripts/write_phase1_sanity_report.py)
+- [`scripts/select_phase2_attributes.py`](scripts/select_phase2_attributes.py)
+- [`scripts/smoke_stage_cache.py`](scripts/smoke_stage_cache.py)
 - [`src/lger/hf_llava.py`](src/lger/hf_llava.py)
+- [`src/lger/hf_stage_cache.py`](src/lger/hf_stage_cache.py)
+- [`src/lger/stage_cache.py`](src/lger/stage_cache.py)
 - [`src/lger/phase1b.py`](src/lger/phase1b.py)
 - [`src/lger/probe.py`](src/lger/probe.py)
 - [`src/lger/localization.py`](src/lger/localization.py)
@@ -154,8 +173,7 @@ Important implementation entry points:
 - Random-selection seeds: 0, 1, 2.
 - Corrected fixed concepts: `bird`, `birds`.
 
-Official-split and cache identity are intended by construction but remain part
-of the pending Phase 01 audit.
+Official-split and cache identity passed the completed Phase 01 audit.
 
 ### 4.2 Corrected probe output supplied from Kaggle
 
@@ -194,7 +212,7 @@ the earlier localization run are unaffected:
 The high Top-K box concentration and weak top-1 pointing rate form an explicit
 anomaly to preserve.
 
-### 4.4 Invalid/stale artifact warning
+### 4.4 Historical invalid/stale artifact warning
 
 The result bundle previously inspected under local `Downloads/kaggle 2` was not
 the corrected bundle. Its `evaluation_config.json` pointed to:
@@ -211,10 +229,19 @@ and listed concept token IDs:
 
 Token 29871 is a standalone SentencePiece whitespace marker. Therefore, do not
 use that bundle's `logit_concept` or `attention_logit_fusion` localization rows.
-The corrected probe console output is promising, but it does not replace the
-missing corrected metadata and localization bundle.
+That bundle remains invalid. The subsequently supplied corrected bundle was
+verified and is the sole source for the corrected localization results below:
 
-## 5. Immediate Gate 1 plan
+- corrected concept Top-16/Top-32 inside-box: 88.6%/89.3%;
+- corrected concept pointing: 80.0%;
+- fusion Top-16/Top-32 inside-box: 65.8%/78.1%;
+- fusion pointing: 32.5%.
+
+## 5. Completed Gate 1 audit
+
+**Decision: PASS WITH ANOMALY.** All 16 blocking checks passed. The following
+commands and artifact checklist are retained for reproduction; they are no
+longer pending work.
 
 ### Step 1: generate corrected qualitative figures on Kaggle
 
@@ -304,13 +331,14 @@ Required correction checks:
 - corrected localization interpretation;
 - updated [`reports/PHASE_01B_TECHNICAL_REPORT.md`](reports/PHASE_01B_TECHNICAL_REPORT.md).
 
-## 6. Gate 2 plan: stage-aligned representation cache
+## 6. Gate 2 status: stage-aligned representation-cache smoke
 
-Begin this section only after Gate 1 passes.
+Gate 1 has passed. The schema and one-image implementation are complete locally;
+the real Kaggle GPU smoke remains the next gate.
 
-### Step 1: write the schema before the extractor
+### Step 1: schema — complete
 
-Create `representation_cache_schema.md` defining:
+`representation_cache_schema.md` now defines:
 
 - image, class, official split, and dataset version identifiers;
 - CUB attribute labels, presence/certainty, visible parts, and coordinates;
@@ -324,15 +352,15 @@ Create `representation_cache_schema.md` defining:
 - shard/index layout, atomic writes, resumption rules, and full-config
   validation.
 
-Do not choose a storage format until one-image sizing is measured. Prefer a
+The production storage format remains intentionally undecided until one-image
+sizing is measured. Prefer a
 small number of indexed shards using safetensors, HDF5, or chunked memmap. Avoid
 one monolithic file and thousands of tiny per-layer files.
 
-### Step 2: fill the current data-loader gap
+### Step 2: official attribute pipeline — complete locally
 
-The code already loads CUB classes, boxes, split metadata, and part locations.
-It does not yet implement the official attribute-label pipeline. Inspect the
-attached CUB distribution's exact attribute files, then add:
+The code loads the official vocabulary, certainty vocabulary, per-image binary
+presence, worker time, and explicit missing/uncertain states. It includes:
 
 - an explicit attribute vocabulary;
 - per-image presence labels and certainty;
@@ -340,19 +368,19 @@ attached CUB distribution's exact attribute files, then add:
 - tests with a minimal synthetic CUB fixture;
 - a documented attribute subset chosen using training data only.
 
-Do not invent class descriptions or attribute-to-part mappings after looking at
+No class descriptions or attribute-to-part mappings were inferred from
 validation results.
 
-### Step 3: implement stage extraction
+### Step 3: one-image stage extraction — complete locally
 
-Resolve indices from the actual model configuration and initially store:
+The extractor resolves indices from the actual model configuration and stores:
 
 - vision early, middle, late, and final patch states;
 - projector output before insertion into the LLM;
 - LLM early, middle, late, and final visual-token states;
 - fixed-prompt answer text and answer-token logits.
 
-Required invariants:
+Implemented invariants:
 
 - the entire VLM stays frozen;
 - stable spatial patch identity is preserved or an exact mapping is stored;
@@ -362,10 +390,11 @@ Required invariants:
 - incomplete records are written atomically and never mistaken for complete
   records.
 
-### Step 4: local tests and one-image Kaggle smoke test
+### Step 4: tests complete; real Kaggle smoke pending
 
-Local tests should cover schema validation, stage naming, layer resolution,
-spatial mapping, atomic resumption, finite values, and mocked extraction.
+All 49 local tests pass. Coverage includes schema validation, stage naming,
+layer resolution, spatial mapping, atomic resumption, finite values, raw
+answer-logit alignment, and mocked extraction.
 
 Then run one image on Kaggle and report:
 
@@ -471,26 +500,27 @@ The next chat should complete one of these bounded outcomes:
 
 ### Preferred outcome
 
-- corrected Phase 01 bundle inspected;
-- correction and integrity checks pass;
-- quantitative and qualitative anomalies documented;
-- formal report updated;
-- Phase 01 decision recorded;
-- stage-cache schema and one-image implementation started only if the gate
-  passes.
+- Phase 2 implementation committed and fetched into Kaggle;
+- training-only `attribute_subset.json` generated and reviewed;
+- exactly one image extracted through all nine aligned stages;
+- smoke record saved, reloaded, and validated;
+- exact stage indices, shapes, dtypes, storage, runtime, answer, and peak memory
+  reported;
+- production shard format recommended from measured evidence;
+- work stopped before the 240-image extraction.
 
 ### Valid blocked outcome
 
-- missing or invalid corrected artifacts identified precisely;
-- exact Kaggle rerun/download command supplied;
-- no stage-cache work started;
-- blocker and required user artifact stated clearly.
+- Kaggle/model/dataset incompatibility identified precisely;
+- exact failing invariant and recovery command supplied;
+- no 240-image extraction started;
+- blocker and required artifact stated clearly.
 
 ### Valid stop outcome
 
-- sanity report returns `STOP / INVESTIGATE`;
+- one-image smoke fails alignment, finiteness, resumption, storage, or memory;
 - root cause is diagnosed or narrowed;
-- no later experiment is used to bypass the failed gate.
+- the production cache and Phase 3 are not started.
 
 ## 11. Canonical references
 
@@ -522,4 +552,3 @@ Every future chat or experiment should finish with:
 8. tests and integrity checks run;
 9. artifacts still required from Kaggle or the user;
 10. the single next authorized phase.
-

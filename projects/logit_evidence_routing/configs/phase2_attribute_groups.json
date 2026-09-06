@@ -1,0 +1,19 @@
+{
+  "allowed_certainty_names": [
+    "probably",
+    "definitely"
+  ],
+  "groups": [
+    "has_crown_color",
+    "has_wing_pattern",
+    "has_bill_shape",
+    "has_breast_color",
+    "has_head_pattern"
+  ],
+  "max_missing_fraction": 0.25,
+  "min_negative_train": 10,
+  "min_positive_train": 10,
+  "rationale": "Predeclared fine-grained families covering crown colour, wing pattern, bill shape, breast colour, and head-pattern cues such as eye stripes. Eligibility counts use development-train annotations only.",
+  "schema_version": 1,
+  "selection_split": "development_train_only"
+}

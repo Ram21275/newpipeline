@@ -4,13 +4,19 @@ from pathlib import Path
 
 from lger.cub import (
     CubBoundingBox,
+    center_crop_transform,
     discover_cub_root,
+    load_cub_attributes,
+    load_cub_certainties,
     load_cub_bounding_boxes,
+    load_cub_image_attribute_labels,
     load_cub_part_locations,
     load_cub_records,
     make_balanced_pilot_split,
+    materialize_attribute_targets,
     map_bbox_to_center_crop,
     map_point_to_center_crop,
+    select_training_attribute_subset,
 )
 
 
@@ -50,6 +56,24 @@ class CubTests(unittest.TestCase):
                 for current_id in range(1, image_id)
             )
             + "\n"
+        )
+        (root / "attributes").mkdir()
+        (root / "attributes" / "attributes.txt").write_text(
+            "1 has_crown_color::red\n"
+            "2 has_wing_pattern::striped\n"
+        )
+        (root / "attributes" / "certainties.txt").write_text(
+            "1 not visible\n"
+            "2 guess\n"
+            "3 probably\n"
+            "4 definitely\n"
+        )
+        (root / "attributes" / "image_attribute_labels.txt").write_text(
+            "1 1 1 4 1.0\n"
+            "2 1 0 3 1.1\n"
+            "3 1 1 2 1.2\n"
+            "4 1 0 4 1.3\n"
+            "1 2 1 1 1.4\n"
         )
         return root
 
@@ -109,6 +133,51 @@ class CubTests(unittest.TestCase):
             locations = load_cub_part_locations(root)
             self.assertTrue(locations[1][0].visible)
             self.assertFalse(locations[2][0].visible)
+
+    def test_attribute_labels_preserve_uncertainty_and_missingness(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = self.build_cub(Path(temporary))
+            attributes = load_cub_attributes(root)
+            certainties = load_cub_certainties(root)
+            labels = load_cub_image_attribute_labels(root, image_ids={1, 2})
+            targets = materialize_attribute_targets(
+                attributes, certainties, labels[1]
+            )
+            self.assertEqual(attributes[0].group, "has_crown_color")
+            self.assertEqual(targets[0]["state"], "present")
+            self.assertTrue(targets[0]["primary_target"])
+            self.assertEqual(targets[1]["state"], "not_visible")
+            self.assertIsNone(targets[1]["primary_target"])
+            self.assertEqual(len(labels[2]), 1)
+
+    def test_attribute_subset_uses_only_requested_training_images(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = self.build_cub(Path(temporary))
+            attributes = load_cub_attributes(root)
+            certainties = load_cub_certainties(root)
+            labels = load_cub_image_attribute_labels(root, image_ids={1, 2, 3, 4})
+            selected = select_training_attribute_subset(
+                attributes,
+                certainties,
+                labels,
+                train_image_ids={1, 2, 3, 4},
+                groups={"has_crown_color", "has_wing_pattern"},
+                allowed_certainty_names={"probably", "definitely"},
+                min_positive=1,
+                min_negative=1,
+                max_missing_fraction=0.25,
+            )
+            self.assertEqual([row["attribute_id"] for row in selected], [1])
+            self.assertEqual(selected[0]["positive_train"], 1)
+            self.assertEqual(selected[0]["negative_train"], 2)
+
+    def test_center_crop_transform_is_explicit(self) -> None:
+        transform = center_crop_transform(
+            original_size=(100, 50), output_size=(40, 40)
+        )
+        self.assertEqual(transform.resized_size, (80, 40))
+        self.assertEqual(transform.crop_left, 20)
+        self.assertEqual(transform.crop_top, 0)
 
 
 if __name__ == "__main__":

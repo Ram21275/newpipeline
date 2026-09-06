@@ -39,8 +39,10 @@ decoded concept tokens, and refuses to benchmark legacy concept caches.
 
 The corrected Kaggle probe run subsequently reached 91.3%/95.0% accuracy for
 `logit_concept` at K=16/K=32 and 88.8%/95.0% for
-`attention_logit_fusion`. These remain development-pilot findings until the
-corrected result bundle and Phase 01 sanity report are audited. The full
+`attention_logit_fusion`. The supplied corrected result bundle, sanity report,
+and all 20 disagreement figures have now been audited. The gate is
+`PASS WITH ANOMALY`; these remain development-pilot findings rather than held-out
+test results. The full
 architecture, result, evidence-boundary, and forward-test report is available
 in [`reports/PHASE_01B_TECHNICAL_REPORT.md`](reports/PHASE_01B_TECHNICAL_REPORT.md).
 To continue this work in a new chat, use the self-contained
@@ -204,6 +206,50 @@ After it passes, proceed in this order:
 The immediate development task after a passing report is therefore the
 stage-aligned representation-cache implementation—not another selector sweep or
 a sparse-autoencoder experiment.
+
+## Phase 2 one-image smoke test
+
+Phase 1 passed with the documented Vision-CLS Top-K/top-1 pointing anomaly. The
+Phase 2 implementation is intentionally limited to attribute-subset selection
+from development-training annotations and one image of stage-aligned extraction.
+Its schema and acceptance checks are documented in
+[`representation_cache_schema.md`](representation_cache_schema.md).
+
+After pulling the latest `feat/iclr` commit into a Kaggle GPU notebook, first
+freeze the attribute subset without loading validation annotations:
+
+```python
+%cd /kaggle/working/newpipeline/projects/logit_evidence_routing
+
+!PYTHONPATH=src python scripts/select_phase2_attributes.py \
+  --manifest /kaggle/working/phase1/pilot_manifest.csv \
+  --config configs/phase2_attribute_groups.json \
+  --output /kaggle/working/representation_cache_smoke/attribute_subset.json \
+  --search-root /kaggle/input
+```
+
+Then run exactly one frozen-model image:
+
+```python
+!PYTHONPATH=src python scripts/smoke_stage_cache.py \
+  --phase1-gate /kaggle/working/phase1b_corrected/results/phase1_gate.json \
+  --manifest /kaggle/working/phase1/pilot_manifest.csv \
+  --attribute-subset /kaggle/working/representation_cache_smoke/attribute_subset.json \
+  --output-dir /kaggle/working/representation_cache_smoke \
+  --search-root /kaggle/input \
+  --model llava-hf/llava-1.5-7b-hf \
+  --revision b234b804b114d9e37bb655e11cbbb5f5e971b7a9 \
+  --quantization 4bit \
+  --prompt "Describe the image briefly." \
+  --max-new-tokens 32
+```
+
+The smoke job writes `run_config.json`, one atomic `.pt` sizing record,
+`index.json`, and `smoke_summary.json`. It validates a save/reload cycle and
+reports resolved stages, shapes, dtypes, bytes per image, projected 240-image
+storage/runtime, and peak GPU memory. The `.pt` layout is not the production
+format. Stop after this command and review `smoke_summary.json` before choosing
+the final indexed shard format or authorizing the 240-image extraction.
 
 ## Outputs to download
 

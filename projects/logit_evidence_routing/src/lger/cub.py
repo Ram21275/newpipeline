@@ -54,6 +54,49 @@ class CubPartLocation:
     visible: bool
 
 
+@dataclass(frozen=True)
+class CubAttribute:
+    """One entry from CUB's explicit image-attribute vocabulary."""
+
+    attribute_id: int
+    name: str
+
+    @property
+    def group(self) -> str:
+        return self.name.split("::", 1)[0]
+
+
+@dataclass(frozen=True)
+class CubCertainty:
+    """One MTurk certainty level defined by the CUB distribution."""
+
+    certainty_id: int
+    name: str
+
+
+@dataclass(frozen=True)
+class CubImageAttributeLabel:
+    """Raw per-image CUB attribute label with its annotation certainty."""
+
+    image_id: int
+    attribute_id: int
+    is_present: bool
+    certainty_id: int
+    worker_time_seconds: float
+
+
+@dataclass(frozen=True)
+class CenterCropTransform:
+    """Exact shortest-edge resize and center-crop geometry for classic LLaVA."""
+
+    original_size: tuple[int, int]
+    resized_size: tuple[int, int]
+    output_size: tuple[int, int]
+    scale_xy: tuple[float, float]
+    crop_left: int
+    crop_top: int
+
+
 def discover_cub_root(search_root: Path) -> Path:
     """Find one official CUB metadata root below a Kaggle input directory."""
 
@@ -196,13 +239,240 @@ def load_cub_part_locations(cub_root: Path) -> dict[int, list[CubPartLocation]]:
     return locations
 
 
-def map_bbox_to_center_crop(
-    box: CubBoundingBox,
+def load_cub_attributes(cub_root: Path) -> list[CubAttribute]:
+    """Load the official CUB attribute vocabulary without inferring new labels."""
+
+    path = cub_root.expanduser().resolve() / "attributes" / "attributes.txt"
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing CUB attribute vocabulary: {path}")
+    values = _read_two_column_file(path)
+    attributes = [CubAttribute(key, values[key]) for key in sorted(values)]
+    if not attributes:
+        raise ValueError(f"CUB attribute vocabulary is empty: {path}")
+    return attributes
+
+
+def load_cub_certainties(cub_root: Path) -> list[CubCertainty]:
+    """Load CUB's named certainty scale used by image attribute labels."""
+
+    path = cub_root.expanduser().resolve() / "attributes" / "certainties.txt"
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing CUB certainty vocabulary: {path}")
+    values = _read_two_column_file(path)
+    certainties = [CubCertainty(key, values[key]) for key in sorted(values)]
+    if not certainties:
+        raise ValueError(f"CUB certainty vocabulary is empty: {path}")
+    return certainties
+
+
+def load_cub_image_attribute_labels(
+    cub_root: Path,
+    *,
+    image_ids: set[int] | None = None,
+) -> dict[int, list[CubImageAttributeLabel]]:
+    """Load raw image attributes, optionally retaining only requested images.
+
+    The loader preserves presence and certainty separately. It deliberately does
+    not turn ``not visible`` or ``guess`` rows into training targets; that policy
+    is applied explicitly by :func:`materialize_attribute_targets`.
+    """
+
+    cub_root = cub_root.expanduser().resolve()
+    path = cub_root / "attributes" / "image_attribute_labels.txt"
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing CUB image attribute labels: {path}")
+    attribute_ids = {item.attribute_id for item in load_cub_attributes(cub_root)}
+    certainty_ids = {item.certainty_id for item in load_cub_certainties(cub_root)}
+    requested = set(image_ids) if image_ids is not None else None
+    labels: dict[int, list[CubImageAttributeLabel]] = {}
+    seen: set[tuple[int, int]] = set()
+    with path.open(encoding="utf-8") as handle:
+        for line_number, raw_line in enumerate(handle, start=1):
+            parts = raw_line.split()
+            if not parts:
+                continue
+            if len(parts) != 5:
+                raise ValueError(f"Malformed attribute label at {path}:{line_number}")
+            image_id, attribute_id = int(parts[0]), int(parts[1])
+            if requested is not None and image_id not in requested:
+                continue
+            key = (image_id, attribute_id)
+            if key in seen:
+                raise ValueError(f"Duplicate image/attribute pair {key} in {path}")
+            seen.add(key)
+            is_present = int(parts[2])
+            certainty_id = int(parts[3])
+            if attribute_id not in attribute_ids:
+                raise ValueError(
+                    f"Unknown attribute ID {attribute_id} at {path}:{line_number}"
+                )
+            if is_present not in (0, 1):
+                raise ValueError(
+                    f"Attribute presence must be 0/1 at {path}:{line_number}"
+                )
+            if certainty_id not in certainty_ids:
+                raise ValueError(
+                    f"Unknown certainty ID {certainty_id} at {path}:{line_number}"
+                )
+            worker_time = float(parts[4])
+            if worker_time < 0:
+                raise ValueError(f"Negative annotation time at {path}:{line_number}")
+            labels.setdefault(image_id, []).append(
+                CubImageAttributeLabel(
+                    image_id=image_id,
+                    attribute_id=attribute_id,
+                    is_present=bool(is_present),
+                    certainty_id=certainty_id,
+                    worker_time_seconds=worker_time,
+                )
+            )
+    if requested is not None:
+        for image_id in requested:
+            labels.setdefault(image_id, [])
+    if not labels:
+        raise ValueError(f"No requested CUB attribute labels found in {path}")
+    for rows in labels.values():
+        rows.sort(key=lambda item: item.attribute_id)
+    return labels
+
+
+def materialize_attribute_targets(
+    attributes: list[CubAttribute],
+    certainties: list[CubCertainty],
+    labels: list[CubImageAttributeLabel],
+) -> list[dict[str, object]]:
+    """Create explicit raw and primary-target states for one image.
+
+    The primary policy treats ``probably`` and ``definitely`` as observed binary
+    targets, while ``guess`` and ``not visible`` remain stored but masked. A
+    genuinely absent annotation is represented as ``missing``. This keeps label
+    uncertainty separate from feature extraction and permits later sensitivity
+    analyses without changing the cache.
+    """
+
+    certainty_by_id = {item.certainty_id: item.name for item in certainties}
+    label_by_attribute = {item.attribute_id: item for item in labels}
+    if len(label_by_attribute) != len(labels):
+        raise ValueError("duplicate attribute labels cannot be materialized")
+    output: list[dict[str, object]] = []
+    for attribute in sorted(attributes, key=lambda item: item.attribute_id):
+        label = label_by_attribute.get(attribute.attribute_id)
+        if label is None:
+            output.append(
+                {
+                    "attribute_id": attribute.attribute_id,
+                    "name": attribute.name,
+                    "group": attribute.group,
+                    "is_present": None,
+                    "certainty_id": None,
+                    "certainty_name": None,
+                    "worker_time_seconds": None,
+                    "state": "missing",
+                    "primary_target": None,
+                }
+            )
+            continue
+        certainty_name = certainty_by_id[label.certainty_id]
+        normalized_certainty = certainty_name.strip().lower()
+        if normalized_certainty == "not visible":
+            state = "not_visible"
+            primary_target: bool | None = None
+        elif normalized_certainty == "guess":
+            state = "uncertain"
+            primary_target = None
+        else:
+            state = "present" if label.is_present else "absent"
+            primary_target = label.is_present
+        output.append(
+            {
+                "attribute_id": attribute.attribute_id,
+                "name": attribute.name,
+                "group": attribute.group,
+                "is_present": label.is_present,
+                "certainty_id": label.certainty_id,
+                "certainty_name": certainty_name,
+                "worker_time_seconds": label.worker_time_seconds,
+                "state": state,
+                "primary_target": primary_target,
+            }
+        )
+    return output
+
+
+def select_training_attribute_subset(
+    attributes: list[CubAttribute],
+    certainties: list[CubCertainty],
+    labels_by_image: dict[int, list[CubImageAttributeLabel]],
+    *,
+    train_image_ids: set[int],
+    groups: set[str],
+    allowed_certainty_names: set[str],
+    min_positive: int,
+    min_negative: int,
+    max_missing_fraction: float,
+) -> list[dict[str, object]]:
+    """Select probe attributes using development-training annotations only."""
+
+    if not train_image_ids:
+        raise ValueError("attribute selection requires development-training images")
+    if not groups:
+        raise ValueError("at least one attribute group is required")
+    if min(min_positive, min_negative) < 0:
+        raise ValueError("minimum positive/negative counts cannot be negative")
+    if not 0 <= max_missing_fraction < 1:
+        raise ValueError("max_missing_fraction must be in [0, 1)")
+    certainty_by_id = {
+        item.certainty_id: item.name.strip().lower() for item in certainties
+    }
+    allowed = {name.strip().lower() for name in allowed_certainty_names}
+    labels_by_key = {
+        (row.image_id, row.attribute_id): row
+        for image_id, rows in labels_by_image.items()
+        if image_id in train_image_ids
+        for row in rows
+    }
+    selected: list[dict[str, object]] = []
+    total = len(train_image_ids)
+    for attribute in attributes:
+        if attribute.group not in groups:
+            continue
+        positive = 0
+        negative = 0
+        for image_id in train_image_ids:
+            label = labels_by_key.get((image_id, attribute.attribute_id))
+            if label is None or certainty_by_id[label.certainty_id] not in allowed:
+                continue
+            if label.is_present:
+                positive += 1
+            else:
+                negative += 1
+        observed = positive + negative
+        missing_fraction = 1.0 - observed / total
+        if (
+            positive >= min_positive
+            and negative >= min_negative
+            and missing_fraction <= max_missing_fraction
+        ):
+            selected.append(
+                {
+                    "attribute_id": attribute.attribute_id,
+                    "name": attribute.name,
+                    "group": attribute.group,
+                    "positive_train": positive,
+                    "negative_train": negative,
+                    "observed_train": observed,
+                    "missing_fraction_train": missing_fraction,
+                }
+            )
+    return selected
+
+
+def center_crop_transform(
     *,
     original_size: tuple[int, int],
     output_size: tuple[int, int],
-) -> tuple[float, float, float, float]:
-    """Map a box through Transformers' shortest-edge resize and center crop."""
+) -> CenterCropTransform:
+    """Resolve the geometry shared by box, part, and patch-coordinate mapping."""
 
     original_width, original_height = original_size
     output_width, output_height = output_size
@@ -216,14 +486,33 @@ def map_bbox_to_center_crop(
     else:
         resized_height = output_height
         resized_width = int(output_height * original_width / original_height)
-    scale_x = resized_width / original_width
-    scale_y = resized_height / original_height
-    crop_left = (resized_width - output_width) // 2
-    crop_top = (resized_height - output_height) // 2
-    x1 = box.x * scale_x - crop_left
-    y1 = box.y * scale_y - crop_top
-    x2 = (box.x + box.width) * scale_x - crop_left
-    y2 = (box.y + box.height) * scale_y - crop_top
+    return CenterCropTransform(
+        original_size=original_size,
+        resized_size=(resized_width, resized_height),
+        output_size=output_size,
+        scale_xy=(resized_width / original_width, resized_height / original_height),
+        crop_left=(resized_width - output_width) // 2,
+        crop_top=(resized_height - output_height) // 2,
+    )
+
+
+def map_bbox_to_center_crop(
+    box: CubBoundingBox,
+    *,
+    original_size: tuple[int, int],
+    output_size: tuple[int, int],
+) -> tuple[float, float, float, float]:
+    """Map a box through Transformers' shortest-edge resize and center crop."""
+
+    output_width, output_height = output_size
+    transform = center_crop_transform(
+        original_size=original_size, output_size=output_size
+    )
+    scale_x, scale_y = transform.scale_xy
+    x1 = box.x * scale_x - transform.crop_left
+    y1 = box.y * scale_y - transform.crop_top
+    x2 = (box.x + box.width) * scale_x - transform.crop_left
+    y2 = (box.y + box.height) * scale_y - transform.crop_top
     clipped = (
         min(max(x1, 0.0), float(output_width)),
         min(max(y1, 0.0), float(output_height)),
@@ -243,20 +532,13 @@ def map_point_to_center_crop(
 ) -> tuple[float, float] | None:
     """Map a point through the same shortest-edge resize and center crop."""
 
-    original_width, original_height = original_size
     output_width, output_height = output_size
-    if min(original_width, original_height, output_width, output_height) <= 0:
-        raise ValueError("image dimensions must be positive")
-    if output_width != output_height:
-        raise ValueError("classic LLaVA center-crop output must be square")
-    if original_width <= original_height:
-        resized_width = output_width
-        resized_height = int(output_width * original_height / original_width)
-    else:
-        resized_height = output_height
-        resized_width = int(output_height * original_width / original_height)
-    x = point[0] * resized_width / original_width - (resized_width - output_width) // 2
-    y = point[1] * resized_height / original_height - (resized_height - output_height) // 2
+    transform = center_crop_transform(
+        original_size=original_size, output_size=output_size
+    )
+    scale_x, scale_y = transform.scale_xy
+    x = point[0] * scale_x - transform.crop_left
+    y = point[1] * scale_y - transform.crop_top
     if not (0 <= x < output_width and 0 <= y < output_height):
         return None
     return x, y
