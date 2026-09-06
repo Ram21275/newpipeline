@@ -366,6 +366,14 @@ The original Kaggle cells are versioned in
 and [`notebooks/phase4_entry_cached_localizer_smoke.ipynb`](notebooks/phase4_entry_cached_localizer_smoke.ipynb).
 No model weights, representation caches, or datasets are included in the result bundle.
 
-Next: the missing Phase 4 dense semantic/attribute-part localization smoke on
-Kaggle. The existing-map smoke does not complete Phase 4. Official test remains
-untouched, and no causal transition has been selected.
+The remaining Phase 4 implementation is now available in
+[`notebooks/phase4_full_development_kaggle.ipynb`](notebooks/phase4_full_development_kaggle.ipynb).
+Run both cells on Kaggle: new paired-semantic one-image smoke, then the full
+240-image development comparison and result validator. See the
+[fixed protocol](planning/08_PHASE4_LOCALIZATION_PROTOCOL.md) for scoring,
+attribute-to-part proxies, exclusions, denominator rules and output counts.
+
+Actual semantic/full-run results remain pending Kaggle execution. Local checks
+use synthetic inputs only. The earlier cached-map smoke does not complete Phase 4,
+and the new code does not invent results. Official test remains untouched; no
+causal transition has been selected.

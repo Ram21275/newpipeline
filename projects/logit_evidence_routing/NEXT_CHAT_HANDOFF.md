@@ -27,11 +27,54 @@ Macro stability hides heterogeneity: bill-shape group AUROC changes 0.8282 → 0
 
 Vision.late (hidden-state index 23) feeds the projector. Vision.final (24) is a separate diagnostic checkpoint. LLM indices are 8/16/31/32. Do not treat the vision.final→projector line in the display as an adjacent computation edge. No causal bottleneck, token redistribution, or answer-utilization gap has been established.
 
-## Next authorized phase
+## Phase 4 implementation is ready; real semantic/full results are pending
 
-Continue **Phase 4**, specifically the missing dense image–text similarity baseline and attribute-relevant localization protocol. Inspect existing code before adding features. Use a verified paired image/text embedding space with pinned heads, revision, normalization and preprocessing; do not compare arbitrary raw vision and text vectors. Define descriptions and relevant-part mappings for all existing 26 attributes, with positive/certain/visible/in-crop eligibility and explicit denominators. Generic bird/birds maps are object controls, not attribute-specific maps. Preserve compatible Logit Lens normalization and multi-token semantics.
+The user requested completing Phase 4. The missing paired-semantic scorer and
+matched development evaluator are now implemented, with synthetic-only local
+validation. No real CLIP/model run or new Phase 4 result has been generated locally.
 
-Start with one deterministic development-training image on Kaggle. After that passes, run the matched development localization comparison. Then Phase 5 fixed-question utilization, Phase 6 combined findings, Phase 7 one supported causal intervention, and Phase 8 final frozen official-test evaluation. Do not jump ahead or select a hypothesis from the current macro curve.
+Run `notebooks/phase4_full_development_kaggle.ipynb` on Kaggle, both cells in order:
+
+1. Fetch and verify latest `feat/iclr`; run `test_phase4.py`; execute the NEW paired
+   CLIP semantic smoke on the smallest development-training image. This verifies
+   global projection/normalization equivalence and all 27 query maps.
+2. Run the full 240-image development localization only after its matching smoke
+   passes, then validate/recompute summaries, show the validation tables/plots and
+   export `phase4_development_results_bundle.zip` for review.
+
+Implementation entry points:
+
+- `configs/phase4_localization.json`: fixed 26 queries/attribute identities,
+  explicit part proxies, K=16/32, random seeds 0/1/2, pinned paired CLIP revision.
+- `src/lger/dense_clip.py`: frozen float32 CLIP paired image/text projections,
+  contextual patch cosine, cached uint8 RGB normalization without spatial resampling.
+- `src/lger/phase4.py`: metadata-only Phase 2 checks, corrected-map joining,
+  positive/certain/visible/in-crop eligibility, matched metrics and aggregation.
+- `scripts/run_phase4_localization.py`: smoke/development runner, same-protocol
+  gate, per-image resume, source hashes, versions, qualitative panels and report.
+- `scripts/validate_phase4_localization.py`: coverage/hash checks, recomputed
+  summaries/paired deltas/agreement, readable results and small report ZIP.
+- `planning/08_PHASE4_LOCALIZATION_PROTOCOL.md`: definitions, sources, exact
+  artifact counts, claim boundaries and instructions.
+
+The dense baseline is `openai/clip-vit-large-patch14-336` at
+`ce19dc912ca5cd21c8a653c79e251e808ccabcd1`, using transformers 4.49.0. Its globally
+trained head is applied to contextual patches as a diagnostic, not a dense
+segmentation model. It is distinct from the quantized LLaVA vision tower.
+Generic bird/birds and prompt-attention maps remain object-level controls;
+dense-attribute maps use the named attribute query. Landmark proxies are not masks.
+
+The full run keeps train and validation summaries separate. Random seeds are
+averaged within image; macro attribute summaries weight evaluable attributes
+equally and expose how many of the 26 attributes are evaluable. Do not change
+queries or mappings based on the validation result. The six smallest validation
+IDs supply qualitative examples, with the first eligible attribute by policy order.
+
+Local validation includes an end-to-end synthetic smoke/resume, a synthetic
+240-record coverage test (no pretrained inference), corruption/exclusion gates,
+and visual inspection of rendered synthetic figures. Real Kaggle execution is
+still necessary. Review its returned results before starting Phase 5, and do not
+select a causal intervention from localization alone. Official test remains untouched.
 
 ## Operating constraints and paths
 
@@ -43,7 +86,7 @@ Start with one deterministic development-training image on Kaggle. After that pa
 - Phase 2 cache: `/kaggle/working/phase2_stage_cache`.
 - Phase 3 full output: `/kaggle/working/phase3_development_1a6e0c96681f_20260906T171249251219Z`.
 - Small source reports are checked into `reports/development_20260906/phase3_review_bundle` and `phase4_cached_localizer_smoke_bundle`; do not request them again.
-- Original executable Kaggle cells are now in `notebooks/`. They reproduce completed runs; the next objective is the missing Phase 4 semantic comparison, not another Phase 3 rerun.
+- The new full Phase 4 notebook is in `notebooks/phase4_full_development_kaggle.ipynb`; the earlier notebooks preserve completed Phase 3/cached-map smoke runs.
 
 The source bundle audit uses only the Python standard library:
 

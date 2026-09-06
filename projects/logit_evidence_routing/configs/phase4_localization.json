@@ -1,0 +1,304 @@
+{
+  "schema_version": 1,
+  "purpose": "phase4_development_spatial_semantic_localization",
+  "cache_config_digest": "63cf0e80ec0a24533682467b6f3b23ccded8625ef25d2fb43d012aa0e72179d8",
+  "dense_model": "openai/clip-vit-large-patch14-336",
+  "dense_revision": "ce19dc912ca5cd21c8a653c79e251e808ccabcd1",
+  "dense_method": "clip_final_patch_post_layernorm_visual_projection_cosine_v1",
+  "dense_limitation": "The globally trained CLIP projection is applied to contextual patch states as a diagnostic; it is not a dense-supervised segmentation model.",
+  "object_text": "a photo of a bird.",
+  "k_values": [
+    16,
+    32
+  ],
+  "random_seeds": [
+    0,
+    1,
+    2
+  ],
+  "eligibility": "observed_positive_and_at_least_one_relevant_visible_in_crop_part",
+  "cached_selectors": [
+    "vision_cls_attention",
+    "llm_attention",
+    "logit_concept",
+    "attention_logit_fusion"
+  ],
+  "attributes": [
+    {
+      "attribute_id": 2,
+      "name": "has_bill_shape::dagger",
+      "group": "has_bill_shape",
+      "text": "a photo of a bird with a dagger-shaped bill.",
+      "relevant_parts": [
+        "beak"
+      ],
+      "landmark_proxy_note": "Beak landmark is a coarse bill-shape location proxy."
+    },
+    {
+      "attribute_id": 5,
+      "name": "has_bill_shape::hooked_seabird",
+      "group": "has_bill_shape",
+      "text": "a photo of a bird with a hooked seabird bill.",
+      "relevant_parts": [
+        "beak"
+      ],
+      "landmark_proxy_note": "Beak landmark is a coarse bill-shape location proxy."
+    },
+    {
+      "attribute_id": 7,
+      "name": "has_bill_shape::all-purpose",
+      "group": "has_bill_shape",
+      "text": "a photo of a bird with an all-purpose bill.",
+      "relevant_parts": [
+        "beak"
+      ],
+      "landmark_proxy_note": "Beak landmark is a coarse bill-shape location proxy."
+    },
+    {
+      "attribute_id": 8,
+      "name": "has_bill_shape::cone",
+      "group": "has_bill_shape",
+      "text": "a photo of a bird with a cone-shaped bill.",
+      "relevant_parts": [
+        "beak"
+      ],
+      "landmark_proxy_note": "Beak landmark is a coarse bill-shape location proxy."
+    },
+    {
+      "attribute_id": 96,
+      "name": "has_head_pattern::malar",
+      "group": "has_head_pattern",
+      "text": "a photo of a bird with a malar stripe on its cheek.",
+      "relevant_parts": [
+        "beak",
+        "throat"
+      ],
+      "landmark_proxy_note": "Coarse beak/throat proxies; CUB has no cheek or malar-stripe mask."
+    },
+    {
+      "attribute_id": 100,
+      "name": "has_head_pattern::eyebrow",
+      "group": "has_head_pattern",
+      "text": "a photo of a bird with an eyebrow stripe above its eye.",
+      "relevant_parts": [
+        "left eye",
+        "right eye",
+        "forehead"
+      ],
+      "landmark_proxy_note": "Eye/forehead proxies, not an eyebrow segmentation."
+    },
+    {
+      "attribute_id": 101,
+      "name": "has_head_pattern::eyering",
+      "group": "has_head_pattern",
+      "text": "a photo of a bird with a ring around its eye.",
+      "relevant_parts": [
+        "left eye",
+        "right eye"
+      ],
+      "landmark_proxy_note": "Eye centers approximate ring location, not its extent."
+    },
+    {
+      "attribute_id": 102,
+      "name": "has_head_pattern::plain",
+      "group": "has_head_pattern",
+      "text": "a photo of a bird with a plain unpatterned head.",
+      "relevant_parts": [
+        "crown",
+        "forehead",
+        "left eye",
+        "right eye",
+        "nape"
+      ],
+      "landmark_proxy_note": "Broad head landmarks, not a head mask."
+    },
+    {
+      "attribute_id": 103,
+      "name": "has_head_pattern::eyeline",
+      "group": "has_head_pattern",
+      "text": "a photo of a bird with a stripe through its eye.",
+      "relevant_parts": [
+        "left eye",
+        "right eye"
+      ],
+      "landmark_proxy_note": "Eye centers approximate the eyeline, not its extent."
+    },
+    {
+      "attribute_id": 104,
+      "name": "has_head_pattern::striped",
+      "group": "has_head_pattern",
+      "text": "a photo of a bird with a striped head.",
+      "relevant_parts": [
+        "crown",
+        "forehead",
+        "nape"
+      ],
+      "landmark_proxy_note": "Broad upper-head landmarks, not stripe pixels."
+    },
+    {
+      "attribute_id": 105,
+      "name": "has_head_pattern::capped",
+      "group": "has_head_pattern",
+      "text": "a photo of a bird with a cap on its head.",
+      "relevant_parts": [
+        "crown",
+        "forehead"
+      ],
+      "landmark_proxy_note": "Crown/forehead proxies for the cap."
+    },
+    {
+      "attribute_id": 107,
+      "name": "has_breast_color::brown",
+      "group": "has_breast_color",
+      "text": "a photo of a bird with a brown breast.",
+      "relevant_parts": [
+        "breast"
+      ],
+      "landmark_proxy_note": "Breast landmark, not a colour-region mask."
+    },
+    {
+      "attribute_id": 111,
+      "name": "has_breast_color::grey",
+      "group": "has_breast_color",
+      "text": "a photo of a bird with a grey breast.",
+      "relevant_parts": [
+        "breast"
+      ],
+      "landmark_proxy_note": "Breast landmark, not a colour-region mask."
+    },
+    {
+      "attribute_id": 117,
+      "name": "has_breast_color::black",
+      "group": "has_breast_color",
+      "text": "a photo of a bird with a black breast.",
+      "relevant_parts": [
+        "breast"
+      ],
+      "landmark_proxy_note": "Breast landmark, not a colour-region mask."
+    },
+    {
+      "attribute_id": 118,
+      "name": "has_breast_color::white",
+      "group": "has_breast_color",
+      "text": "a photo of a bird with a white breast.",
+      "relevant_parts": [
+        "breast"
+      ],
+      "landmark_proxy_note": "Breast landmark, not a colour-region mask."
+    },
+    {
+      "attribute_id": 120,
+      "name": "has_breast_color::buff",
+      "group": "has_breast_color",
+      "text": "a photo of a bird with a buff breast.",
+      "relevant_parts": [
+        "breast"
+      ],
+      "landmark_proxy_note": "Breast landmark, not a colour-region mask."
+    },
+    {
+      "attribute_id": 294,
+      "name": "has_crown_color::blue",
+      "group": "has_crown_color",
+      "text": "a photo of a bird with a blue crown.",
+      "relevant_parts": [
+        "crown"
+      ],
+      "landmark_proxy_note": "Crown landmark, not a colour-region mask."
+    },
+    {
+      "attribute_id": 295,
+      "name": "has_crown_color::brown",
+      "group": "has_crown_color",
+      "text": "a photo of a bird with a brown crown.",
+      "relevant_parts": [
+        "crown"
+      ],
+      "landmark_proxy_note": "Crown landmark, not a colour-region mask."
+    },
+    {
+      "attribute_id": 299,
+      "name": "has_crown_color::grey",
+      "group": "has_crown_color",
+      "text": "a photo of a bird with a grey crown.",
+      "relevant_parts": [
+        "crown"
+      ],
+      "landmark_proxy_note": "Crown landmark, not a colour-region mask."
+    },
+    {
+      "attribute_id": 305,
+      "name": "has_crown_color::black",
+      "group": "has_crown_color",
+      "text": "a photo of a bird with a black crown.",
+      "relevant_parts": [
+        "crown"
+      ],
+      "landmark_proxy_note": "Crown landmark, not a colour-region mask."
+    },
+    {
+      "attribute_id": 306,
+      "name": "has_crown_color::white",
+      "group": "has_crown_color",
+      "text": "a photo of a bird with a white crown.",
+      "relevant_parts": [
+        "crown"
+      ],
+      "landmark_proxy_note": "Crown landmark, not a colour-region mask."
+    },
+    {
+      "attribute_id": 308,
+      "name": "has_crown_color::buff",
+      "group": "has_crown_color",
+      "text": "a photo of a bird with a buff crown.",
+      "relevant_parts": [
+        "crown"
+      ],
+      "landmark_proxy_note": "Crown landmark, not a colour-region mask."
+    },
+    {
+      "attribute_id": 309,
+      "name": "has_wing_pattern::solid",
+      "group": "has_wing_pattern",
+      "text": "a photo of a bird with solid-coloured wings.",
+      "relevant_parts": [
+        "left wing",
+        "right wing"
+      ],
+      "landmark_proxy_note": "Visible wing landmarks, not pattern-region masks."
+    },
+    {
+      "attribute_id": 310,
+      "name": "has_wing_pattern::spotted",
+      "group": "has_wing_pattern",
+      "text": "a photo of a bird with spotted wings.",
+      "relevant_parts": [
+        "left wing",
+        "right wing"
+      ],
+      "landmark_proxy_note": "Visible wing landmarks, not pattern-region masks."
+    },
+    {
+      "attribute_id": 311,
+      "name": "has_wing_pattern::striped",
+      "group": "has_wing_pattern",
+      "text": "a photo of a bird with striped wings.",
+      "relevant_parts": [
+        "left wing",
+        "right wing"
+      ],
+      "landmark_proxy_note": "Visible wing landmarks, not pattern-region masks."
+    },
+    {
+      "attribute_id": 312,
+      "name": "has_wing_pattern::multi-colored",
+      "group": "has_wing_pattern",
+      "text": "a photo of a bird with multicoloured wings.",
+      "relevant_parts": [
+        "left wing",
+        "right wing"
+      ],
+      "landmark_proxy_note": "Visible wing landmarks, not pattern-region masks."
+    }
+  ]
+}
