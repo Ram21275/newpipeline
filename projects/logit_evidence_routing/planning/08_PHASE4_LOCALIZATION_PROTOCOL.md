@@ -1,6 +1,6 @@
 # Complete Phase 4 development localization
 
-Run the two code cells in order in the same GPU-enabled Kaggle kernel, with internet enabled for Git and the pinned CLIP checkpoint. Use the existing transformers==4.49.0 environment from Phases 1–3. All commands execute from `/kaggle/working/newpipeline/projects/logit_evidence_routing`.
+Run the two code cells in order in the same GPU-enabled Kaggle kernel, with internet enabled for Git and the pinned CLIP checkpoint. Cell 1 verifies and, when necessary, installs `transformers==4.49.0` because Kaggle base images can change. All commands execute from `/kaggle/working/newpipeline/projects/logit_evidence_routing`.
 
 Cell 1 fetches the latest `feat/iclr`, tests the new pipeline with synthetic inputs, and runs a NEW one-image paired-semantic smoke. This extends the already passed cached-map smoke by loading frozen CLIP on Kaggle, checking the paired projection/normalization against its global forward logits, and computing all 27 dense query maps. It does not load the 7B VLM or rerun Phase 2 extraction.
 
