@@ -11,6 +11,7 @@ import json
 import os
 import sys
 import time
+import traceback
 from collections import Counter
 from pathlib import Path
 
@@ -86,10 +87,19 @@ def main():
     if args.mode == 'development':
         require(args.smoke_dir is not None, '--smoke-dir is required before development evaluation')
         smoke = read_json(args.smoke_dir / 'phase4_run_report.json')
-        require(smoke['status'] == 'PASS' and smoke['mode'] == 'smoke'
-                and smoke['protocol_digest'] == digest and smoke['image_ids'] == [smoke_id]
-                and smoke['global_projection_checked'] is True
-                and smoke['attribute_metric_rows'] > 0, 'Passing matching semantic smoke is required')
+        smoke_checks = {
+            'status=PASS': smoke.get('status') == 'PASS',
+            'mode=smoke': smoke.get('mode') == 'smoke',
+            'matching protocol digest': smoke.get('protocol_digest') == digest,
+            f'image_ids=[{smoke_id}]': smoke.get('image_ids') == [smoke_id],
+            'global projection checked': smoke.get('global_projection_checked') is True,
+            'attribute rows present': int(smoke.get('attribute_metric_rows', 0)) > 0,
+        }
+        failed_smoke_checks = [name for name, passed in smoke_checks.items() if not passed]
+        require(not failed_smoke_checks,
+                'Passing matching semantic smoke is required; failed checks: '
+                + ', '.join(failed_smoke_checks)
+                + f"; smoke protocol={smoke.get('protocol_digest')}, current protocol={digest}")
         for name, identity in smoke['artifact_manifest'].items():
             require(sha256(args.smoke_dir / name) == identity['sha256'], f'Smoke artifact changed: {name}')
     records = [training[0]] if args.mode == 'smoke' else all_records
@@ -99,6 +109,8 @@ def main():
     write_or_validate_config(args.output_dir / 'evaluation_config.json', run_cfg)
     report_path = args.output_dir / 'phase4_run_report.json'
     report_path.unlink(missing_ok=True)  # A partial rerun must never retain a stale PASS.
+    failure_path = args.output_dir / 'phase4_failure_report.json'
+    failure_path.unlink(missing_ok=True)
     score_dir = args.output_dir / 'dense_scores'
     score_dir.mkdir(exist_ok=True)
     # CUDA determinism requires this before a context is created.
@@ -116,36 +128,56 @@ def main():
     plot_ids = set(sorted(plot_ids)[:6])
     for position, record in enumerate(records, 1):
         image = record['image']
-        pixels, cached_scores, source_hash = join_cached_record(args.localizer_cache, record)
-        score_path = score_dir / f"{image['image_id']:05d}.pt"
-        if score_path.exists():
-            saved = torch.load(score_path, map_location='cpu', weights_only=True)
-            require(saved['protocol_digest'] == digest and saved['image_id'] == image['image_id']
-                    and saved['source_sha256'] == source_hash, 'Dense-score resume identity differs')
-            dense, diagnostics = saved['scores'], saved['diagnostics']
-        else:
-            if scorer is None:
-                print('Loading frozen paired CLIP on Kaggle:', policy['dense_model'], policy['dense_revision'], flush=True)
-                scorer = FrozenDenseClip.from_pretrained(policy, cfg2['spatial_preprocessing'])
-            dense, diagnostics = scorer.score(pixels, validate_global=(position == 1))
-            saved = dict(protocol_digest=digest, image_id=image['image_id'], source_sha256=source_hash,
-                         scores=dense, diagnostics=diagnostics)
-            temporary = score_path.with_suffix('.pt.tmp')
-            torch.save(saved, temporary)
-            temporary.replace(score_path)
-        if position == 1:
-            require(diagnostics['global_projection_checked'] is True, 'First-image projection audit is missing')
-        global_checked |= diagnostics['global_projection_checked']
-        result = evaluate_image(record, cached_scores, dense, policy, part_names)
-        for target, rows in zip((objects, attributes, eligibility, agreements), result):
-            target.extend(rows)
-        source_rows.append(dict(image_id=image['image_id'], split=image['development_split'],
-                                localizer_record_sha256=source_hash,
-                                dense_score_file=str(score_path.relative_to(args.output_dir)),
-                                dense_score_sha256=sha256(score_path)))
-        if image['image_id'] in plot_ids:
-            from lger.phase4_plots import plot_image
-            figures.extend(plot_image(args.output_dir, record, pixels, cached_scores, dense, policy, part_names))
+        step = 'join corrected Phase 1 and Phase 2 records'
+        try:
+            pixels, cached_scores, source_hash = join_cached_record(args.localizer_cache, record)
+            score_path = score_dir / f"{image['image_id']:05d}.pt"
+            step = 'load or compute dense CLIP scores'
+            if score_path.exists():
+                saved = torch.load(score_path, map_location='cpu', weights_only=True)
+                require(saved['protocol_digest'] == digest and saved['image_id'] == image['image_id']
+                        and saved['source_sha256'] == source_hash, 'Dense-score resume identity differs')
+                dense, diagnostics = saved['scores'], saved['diagnostics']
+            else:
+                if scorer is None:
+                    print('Loading frozen paired CLIP on Kaggle:', policy['dense_model'], policy['dense_revision'], flush=True)
+                    scorer = FrozenDenseClip.from_pretrained(policy, cfg2['spatial_preprocessing'])
+                dense, diagnostics = scorer.score(pixels, validate_global=(position == 1))
+                saved = dict(protocol_digest=digest, image_id=image['image_id'], source_sha256=source_hash,
+                             scores=dense, diagnostics=diagnostics)
+                temporary = score_path.with_suffix('.pt.tmp')
+                torch.save(saved, temporary)
+                temporary.replace(score_path)
+            if position == 1:
+                require(diagnostics['global_projection_checked'] is True, 'First-image projection audit is missing')
+            global_checked |= diagnostics['global_projection_checked']
+            step = 'evaluate matched localization metrics'
+            result = evaluate_image(record, cached_scores, dense, policy, part_names)
+            for target, rows in zip((objects, attributes, eligibility, agreements), result):
+                target.extend(rows)
+            source_rows.append(dict(image_id=image['image_id'], split=image['development_split'],
+                                    localizer_record_sha256=source_hash,
+                                    dense_score_file=str(score_path.relative_to(args.output_dir)),
+                                    dense_score_sha256=sha256(score_path)))
+            if image['image_id'] in plot_ids:
+                step = 'render fixed qualitative panel'
+                from lger.phase4_plots import plot_image
+                figures.extend(plot_image(args.output_dir, record, pixels, cached_scores, dense, policy, part_names))
+        except Exception as error:
+            failure = dict(schema_version=1, status='FAIL', mode=args.mode,
+                           protocol_digest=digest, git_commit=run_identity['git_commit'],
+                           failed_position=position, total_images=len(records),
+                           failed_image_id=image['image_id'], failed_split=image['development_split'],
+                           failed_step=step, completed_images=len(source_rows),
+                           cached_dense_scores=len(list(score_dir.glob('*.pt'))),
+                           resumable=True, error_type=type(error).__name__, error=str(error),
+                           traceback=traceback.format_exc(),
+                           official_test_images_used=0,
+                           note='Rerun with the same commit, protocol, paths and output directory to reuse completed scores.')
+            atomic_json_write(failure, failure_path)
+            print('Phase 4 failure context:', json.dumps(failure, indent=2), flush=True)
+            print('Failure report:', failure_path, flush=True)
+            raise
         print(f"[{position}/{len(records)}] image={image['image_id']} split={image['development_split']} "
               f"eligible attributes={len(result[1]) // 18} elapsed={time.monotonic()-start:.1f}s", flush=True)
     require(global_checked and bool(attributes), 'No validated projection or eligible attribute rows')
@@ -191,6 +223,7 @@ def main():
                   phase4_review_required=True, artifact_manifest=manifest,
                   interpretation='Contextual patch similarity and landmark-proxy localization; not causal evidence')
     atomic_json_write(report, report_path)
+    failure_path.unlink(missing_ok=True)
     print(json.dumps(report, indent=2))
     print('Phase 4 computation PASS. Review summaries, support counts and qualitative panels before Phase 5.')
 

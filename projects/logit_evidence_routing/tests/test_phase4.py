@@ -223,6 +223,22 @@ class Phase4PipelineTests(unittest.TestCase):
             self.assertIn('selector_agreement.png',archive.namelist())
             self.assertFalse(any(name.endswith('.pt') for name in archive.namelist()))
 
+    def test_image_failure_records_context_and_allows_clean_retry(self):
+        original_score = self.fake_scorer.score
+        self.fake_scorer.score = mock.Mock(side_effect=RuntimeError('synthetic scoring failure'))
+        with self.assertRaisesRegex(RuntimeError, 'synthetic scoring failure'):
+            self.invoke()
+        failure = json.loads((self.root/'smoke/phase4_failure_report.json').read_text())
+        self.assertEqual(failure['status'], 'FAIL')
+        self.assertEqual(failure['failed_position'], 1)
+        self.assertEqual(failure['failed_image_id'], 0)
+        self.assertEqual(failure['failed_step'], 'load or compute dense CLIP scores')
+        self.assertTrue(failure['resumable'])
+        self.assertIn('synthetic scoring failure', failure['traceback'])
+        self.fake_scorer.score = original_score
+        self.invoke()
+        self.assertFalse((self.root/'smoke/phase4_failure_report.json').exists())
+
     def test_development_requires_matching_semantic_smoke(self):
         with self.assertRaisesRegex(RuntimeError,'smoke-dir is required'):
             self.invoke('development')
