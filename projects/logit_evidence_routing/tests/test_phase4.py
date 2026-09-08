@@ -94,6 +94,11 @@ class Phase4MathTests(unittest.TestCase):
         label['primary_target'] = None
         self.assertEqual(attribute_eligibility(image,a,self.names)[0],'uncertain_or_missing')
         label['primary_target'] = True
+        label['certainty_name'] = 'guess'
+        reason, _, audit = attribute_eligibility(image,a,self.names)
+        self.assertEqual(reason,'uncertain_or_missing')
+        self.assertEqual(audit['unapproved_cached_target_masked'],1)
+        label['certainty_name'] = 'probably'
         for p in image['parts']: p['visible'] = False
         self.assertEqual(attribute_eligibility(image,a,self.names)[0],'no_visible_in_crop_relevant_part')
         for p in image['parts']: p.update(visible=True,model_xy=None)
@@ -238,6 +243,19 @@ class Phase4PipelineTests(unittest.TestCase):
         self.fake_scorer.score = original_score
         self.invoke()
         self.assertFalse((self.root/'smoke/phase4_failure_report.json').exists())
+
+    def test_legacy_unapproved_target_is_masked_and_reported(self):
+        path=self.stage/'0.json';data=json.loads(path.read_text())
+        label=data['records'][0]['packed_record']['image']['attributes'][0]
+        label.update(primary_target=True,certainty_name='guess')
+        self.dump(path,data)
+        index=json.loads((self.stage/'index.json').read_text())
+        index['shards'][0]['metadata_sha256']=sha256(path);self.dump(self.stage/'index.json',index)
+        self.invoke()
+        report,*_=CHECK.validate(self.root/'smoke')
+        self.assertEqual(report['unapproved_cached_targets_masked'],1)
+        self.assertTrue(report['phase3_revalidation_required'])
+        self.assertEqual(report['attribute_metric_rows'],25*18)
 
     def test_development_requires_matching_semantic_smoke(self):
         with self.assertRaisesRegex(RuntimeError,'smoke-dir is required'):

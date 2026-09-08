@@ -26,6 +26,7 @@ from lger.attribute_probe import (  # noqa: E402
     run_masked_multilabel_probe,
     shuffle_observed_targets,
 )
+from lger.cub import PRIMARY_TARGET_CERTAINTY_NAMES  # noqa: E402
 from lger.reproducibility import current_git_commit  # noqa: E402
 from lger.stage_cache import (  # noqa: E402
     REQUIRED_STAGE_NAMES,
@@ -179,6 +180,8 @@ def main() -> None:
         "normalization": "training_feature_mean_std_v1",
         "threshold_policy": "training_f1_only_v1",
         "masked_states": ["guess", "not visible", "missing"],
+        "approved_certainty_names": sorted(PRIMARY_TARGET_CERTAINTY_NAMES),
+        "certainty_policy_enforcement": "consumer_side_allowlist_v1",
         "official_test_images_used": 0,
     }
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -288,6 +291,7 @@ def main() -> None:
         "seeds": list(seeds),
         "result_rows": len(summaries),
         "per_attribute_rows": len(per_attribute),
+        "certainty_policy_overrides_masked": dataset.certainty_policy_overrides_masked,
         "official_test_images_used": 0,
     }
     atomic_json_write(report, args.output_dir / "phase3_run_report.json")

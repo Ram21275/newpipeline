@@ -15,6 +15,8 @@ REQUIRED_CUB_FILES = (
     "train_test_split.txt",
 )
 
+PRIMARY_TARGET_CERTAINTY_NAMES = frozenset({"probably", "definitely"})
+
 
 @dataclass(frozen=True)
 class CubRecord:
@@ -381,15 +383,15 @@ def materialize_attribute_targets(
             continue
         certainty_name = certainty_by_id[label.certainty_id]
         normalized_certainty = certainty_name.strip().lower()
-        if normalized_certainty == "not visible":
+        if normalized_certainty in PRIMARY_TARGET_CERTAINTY_NAMES:
+            state = "present" if label.is_present else "absent"
+            primary_target: bool | None = label.is_present
+        elif normalized_certainty == "not visible":
             state = "not_visible"
-            primary_target: bool | None = None
-        elif normalized_certainty == "guess":
-            state = "uncertain"
             primary_target = None
         else:
-            state = "present" if label.is_present else "absent"
-            primary_target = label.is_present
+            state = "uncertain"
+            primary_target = None
         output.append(
             {
                 "attribute_id": attribute.attribute_id,
@@ -404,6 +406,26 @@ def materialize_attribute_targets(
             }
         )
     return output
+
+
+def certainty_policy_target(
+    label: dict[str, object],
+) -> tuple[bool | None, bool]:
+    """Return the certainty-filtered target and whether a cached target was masked.
+
+    The second value exposes legacy cache rows whose non-null target conflicts
+    with the fixed ``probably``/``definitely`` policy. Consumers can keep the
+    representation tensors and conservatively mask only those labels.
+    """
+
+    cached_target = label.get("primary_target")
+    if cached_target is not True and cached_target is not False and cached_target is not None:
+        raise ValueError("cached primary target must be true, false, or null")
+    certainty_name = label.get("certainty_name")
+    normalized = str(certainty_name).strip().lower() if certainty_name is not None else ""
+    if normalized not in PRIMARY_TARGET_CERTAINTY_NAMES:
+        return None, cached_target is not None
+    return cached_target, False
 
 
 def select_training_attribute_subset(

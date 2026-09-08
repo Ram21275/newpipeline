@@ -100,11 +100,27 @@ def validate(output_dir):
     for row in eligibility:
         require(row['reason'] in reasons and row['split'] == splits[int(row['image_id'])], 'Eligibility split/reason differs')
         require(row['attribute_name'] == attributes[int(row['attribute_id'])]['name'], 'Attribute name differs')
+        require(row['cached_primary_target'] in ('', 'True', 'False')
+                and row['certainty_policy_approved'] in ('True', 'False')
+                and row['unapproved_cached_target_masked'] in ('0', '1'),
+                'Invalid certainty-policy audit fields')
+        approved = row['certainty_name'].strip().lower() in ('probably', 'definitely')
+        require((row['certainty_policy_approved'] == 'True') is approved,
+                'Certainty-policy approval flag differs')
+        masked = row['unapproved_cached_target_masked'] == '1'
+        require(masked is (bool(row['cached_primary_target']) and not approved),
+                'Certainty-policy override flag differs')
         counts = [int(row[name]) for name in ('relevant_annotated_parts', 'relevant_visible_parts',
                                             'relevant_visible_in_crop_parts')]
         require(0 <= counts[2] <= counts[1] <= counts[0], 'Invalid eligibility part counts')
         if row['reason'] == 'eligible':
             require(counts[2] > 0, 'Eligible pair lacks an in-crop relevant landmark')
+        if row['reason'] in ('eligible', 'no_visible_in_crop_relevant_part'):
+            require(approved and row['cached_primary_target'] == 'True', 'Positive eligibility policy differs')
+        elif row['reason'] == 'observed_negative':
+            require(approved and row['cached_primary_target'] == 'False', 'Negative eligibility policy differs')
+        else:
+            require(row['cached_primary_target'] == '' or masked, 'Uncertain eligibility policy differs')
     eligible = {(int(r['image_id']), int(r['attribute_id'])) for r in eligibility if r['reason'] == 'eligible'}
     objects = metric_rows(output_dir / 'object_metrics.csv')
     attrs = metric_rows(output_dir / 'attribute_metrics.csv')
@@ -141,6 +157,10 @@ def validate(output_dir):
     require(len(objects) == report['object_metric_rows'] and len(attrs) == report['attribute_metric_rows']
             and len(eligibility) == report['eligibility_rows'] and len(eligible) == report['eligible_image_attribute_pairs']
             and len(agreements) == report['agreement_rows'], 'Report/table counts differ')
+    masked_targets = sum(r['unapproved_cached_target_masked'] == '1' for r in eligibility)
+    require(report['unapproved_cached_targets_masked'] == masked_targets
+            and report['phase3_revalidation_required'] is (masked_targets > 0),
+            'Certainty-policy report counts differ')
     summary = summarize_metrics(objects + attrs)
     macro = macro_attribute_summary(summary, policy)
     compare_numeric_csv(output_dir / 'localization_summary.csv', summary)
@@ -161,6 +181,11 @@ def render_review(output_dir, report, summary, macro, support):
     lines = ['# Phase 4 localization results', '', f"Computation status: PASS; mode: {report['mode']}.",
              f"Git commit: `{report['git_commit']}`. Protocol: `{report['protocol_digest']}`.", '',
              'Quantitative completion is not a causal claim. Review these results and qualitative panels before Phase 5.', '',
+             f"Certainty audit: {report['unapproved_cached_targets_masked']} non-null cached targets with "
+             'unapproved certainty were masked as uncertain for Phase 4. '
+             + ('Rerun Phase 3 with the corrected consumer-side policy before cross-phase interpretation.'
+                if report['phase3_revalidation_required'] else
+                'The cached primary targets agree with the fixed probably/definitely policy.'), '',
              f'## Object localization, development {split}, K=32', '',
              '| Selector | Inside box | Top-1 in box | Visible-part patch recall | Top-1 part distance |',
              '|---|---:|---:|---:|---:|']
@@ -220,6 +245,8 @@ def main():
     audit = dict(status='PASS', mode=report['mode'], git_commit=report['git_commit'],
                  protocol_digest=report['protocol_digest'], images=report['images'],
                  official_test_images_used=0, dense_score_hashes_verified=score_hashes,
+                 unapproved_cached_targets_masked=report['unapproved_cached_targets_masked'],
+                 phase3_revalidation_required=report['phase3_revalidation_required'],
                  quantitative_evaluation_complete=report['mode']=='development', scientific_review_pending=True)
     atomic_json_write(audit, args.output_dir / 'phase4_validation_report.json')
     if args.bundle:

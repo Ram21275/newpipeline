@@ -6,8 +6,8 @@ Branch: `feat/iclr`. Project: `projects/logit_evidence_routing`.
 
 1. Phase 1: **PASS WITH ANOMALY**. Corrected bird/birds IDs 11199/17952; whitespace ID 29871 rejected. Twenty corrected figures reviewed; preserve Vision-CLS Top-K/top-1 mismatch.
 2. Phase 2: **PASS**. 240 official-training-only CUB images, 160/80 development splits, 12 safetensors shards, nine stages, 576 patches. Cache digest `63cf0e80ec0a24533682467b6f3b23ccded8625ef25d2fb43d012aa0e72179d8`.
-3. Phase 3: **full development PASS**, not just smoke. All nine stages, mean pooling, seeds 0/1/2, 300 epochs, CUDA, 256-dimensional projection, four controls. 90 summary rows and 2,340 attribute rows independently audited from the supplied raw reports.
-4. Phase 4: **one-training-image cached-localizer reuse smoke PASS**, image 544, K=16/32, 14 metric rows, 42 agreement rows. Full Phase 4 is not complete.
+3. Phase 3: the original full development computation passed, but its label-policy revalidation is now required. The Phase 4 full attempt exposed at least one selected-attribute cache row with a non-null target and certainty outside `probably`/`definitely`; the corrected Phase 3 loader masks such rows without re-extracting representations.
+4. Phase 4: **paired-semantic one-image smoke PASS** on image 544. The first full attempt completed seven images and stopped safely at image 575 on the certainty inconsistency. The corrected runner masks and audits legacy target overrides; full Phase 4 must be rerun from the latest commit.
 
 Experiment commit for the supplied Phase 3/4 results: `1a6e0c96681f250659ce703207931289cd9112c2`. The commit adding this handoff is a later result/audit commit; do not relabel old experiments with its hash.
 
@@ -41,6 +41,11 @@ Run `notebooks/phase4_full_development_kaggle.ipynb` on Kaggle, both cells in or
 2. Run the full 240-image development localization only after its matching smoke
    passes, then validate/recompute summaries, show the validation tables/plots and
    export `phase4_development_results_bundle.zip` for review.
+
+Inspect `unapproved_cached_targets_masked` and `phase3_revalidation_required` in
+the returned Phase 4 report. Any override is excluded from Phase 4 eligibility.
+Rerun Phase 3 with the corrected loader before Phase 5/6 comparisons; the existing
+Phase 2 tensors remain reusable.
 
 Implementation entry points:
 

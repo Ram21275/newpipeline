@@ -182,6 +182,7 @@ def main():
               f"eligible attributes={len(result[1]) // 18} elapsed={time.monotonic()-start:.1f}s", flush=True)
     require(global_checked and bool(attributes), 'No validated projection or eligible attribute rows')
     eligible_pairs = sum(r['reason'] == 'eligible' for r in eligibility)
+    unapproved_targets_masked = sum(int(r['unapproved_cached_target_masked']) for r in eligibility)
     require(len(objects) == len(records) * 16 and len(attributes) == eligible_pairs * 18
             and len(eligibility) == len(records) * 26
             and len(agreements) == len(records) * 56 + eligible_pairs * 72, 'Unexpected result row counts')
@@ -216,6 +217,8 @@ def main():
                   split_counts=dict(Counter(r['image']['development_split'] for r in records)),
                   selected_attributes=26, object_metric_rows=len(objects), attribute_metric_rows=len(attributes),
                   eligibility_rows=len(eligibility), eligible_image_attribute_pairs=eligible_pairs,
+                  unapproved_cached_targets_masked=unapproved_targets_masked,
+                  phase3_revalidation_required=unapproved_targets_masked > 0,
                   agreement_rows=len(agreements), global_projection_checked=global_checked,
                   runtime_seconds=time.monotonic()-start,
                   peak_gpu_memory_bytes=torch.cuda.max_memory_allocated(),

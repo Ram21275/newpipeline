@@ -3,8 +3,12 @@ import unittest
 from pathlib import Path
 
 from lger.cub import (
+    CubAttribute,
     CubBoundingBox,
+    CubCertainty,
+    CubImageAttributeLabel,
     center_crop_transform,
+    certainty_policy_target,
     discover_cub_root,
     load_cub_attributes,
     load_cub_certainties,
@@ -149,6 +153,21 @@ class CubTests(unittest.TestCase):
             self.assertEqual(targets[1]["state"], "not_visible")
             self.assertIsNone(targets[1]["primary_target"])
             self.assertEqual(len(labels[2]), 1)
+
+    def test_unapproved_certainty_is_conservatively_masked(self) -> None:
+        targets = materialize_attribute_targets(
+            [CubAttribute(1, "has_crown_color::red")],
+            [CubCertainty(5, "disputed")],
+            [CubImageAttributeLabel(1, 1, True, 5, 1.0)],
+        )
+        self.assertEqual(targets[0]["state"], "uncertain")
+        self.assertIsNone(targets[0]["primary_target"])
+        self.assertEqual(
+            certainty_policy_target(
+                {"primary_target": True, "certainty_name": "guess"}
+            ),
+            (None, True),
+        )
 
     def test_filtered_attribute_loading_ignores_only_unrequested_damage(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

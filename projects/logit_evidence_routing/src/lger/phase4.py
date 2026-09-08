@@ -13,6 +13,7 @@ from pathlib import Path
 
 import torch
 
+from .cub import PRIMARY_TARGET_CERTAINTY_NAMES, certainty_policy_target
 from .localization import patch_centers_in_box, selection_localization_metrics, selection_part_metrics
 from .phase1b import feature_key
 from .scoring import stable_topk
@@ -64,6 +65,8 @@ def load_policy(path):
     require(policy['eligibility'] == 'observed_positive_and_at_least_one_relevant_visible_in_crop_part'
             and policy['dense_method'] == 'clip_final_patch_post_layernorm_visual_projection_cosine_v1',
             'Unsupported eligibility or dense scoring method')
+    require(set(policy.get('approved_certainty_names', ())) == PRIMARY_TARGET_CERTAINTY_NAMES,
+            'Phase 4 must use the fixed probably/definitely certainty policy')
     require(len(policy['dense_revision']) == 40
             and all(c in '0123456789abcdef' for c in policy['dense_revision']), 'Pin the dense model revision')
     attributes = policy['attributes']
@@ -187,16 +190,25 @@ def attribute_eligibility(image, attribute, part_names):
     related = [p for p in image['parts'] if p['part_id'] in ids]
     visible = [p for p in related if p['visible']]
     points = [tuple(p['model_xy']) for p in visible if p['model_xy'] is not None]
-    if label['primary_target'] is None:
+    target, certainty_policy_override = certainty_policy_target(label)
+    certainty_name = label.get('certainty_name')
+    normalized_certainty = (str(certainty_name).strip().lower()
+                              if certainty_name is not None else '')
+    if target is None:
         reason = 'uncertain_or_missing'
-    elif not label['primary_target']:
+    elif not target:
         reason = 'observed_negative'
     else:
-        require(str(label['certainty_name']).strip().lower() in ('probably', 'definitely'),
-                'Positive primary target has an unapproved certainty')
         reason = 'eligible' if points else 'no_visible_in_crop_relevant_part'
-    return reason, points, dict(relevant_annotated_parts=len(related), relevant_visible_parts=len(visible),
-                               relevant_visible_in_crop_parts=len(points))
+    return reason, points, dict(
+        certainty_name=certainty_name,
+        cached_primary_target=label.get('primary_target'),
+        certainty_policy_approved=normalized_certainty in PRIMARY_TARGET_CERTAINTY_NAMES,
+        unapproved_cached_target_masked=int(certainty_policy_override),
+        relevant_annotated_parts=len(related),
+        relevant_visible_parts=len(visible),
+        relevant_visible_in_crop_parts=len(points),
+    )
 
 
 def selection_maps(scores, k, image_id, seeds):

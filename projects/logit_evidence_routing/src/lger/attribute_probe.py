@@ -12,6 +12,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from .cub import certainty_policy_target
 from .reproducibility import set_deterministic_seed
 from .stage_cache import REQUIRED_STAGE_NAMES, config_digest
 
@@ -26,6 +27,7 @@ class StageAttributeDataset:
     targets: torch.Tensor
     features: dict[tuple[str, str], torch.Tensor]
     cache_config_digest: str
+    certainty_policy_overrides_masked: int
 
 
 @dataclass(frozen=True)
@@ -253,6 +255,7 @@ def load_stage_attribute_dataset(
     attribute_ids: tuple[int, ...] | None = None
     attribute_names: tuple[str, ...] | None = None
     attribute_groups: tuple[str, ...] | None = None
+    certainty_policy_overrides_masked = 0
 
     for shard in index["shards"]:
         tensor_path = cache_dir / shard["tensor_path"]
@@ -283,11 +286,14 @@ def load_stage_attribute_dataset(
                     or groups != attribute_groups
                 ):
                     raise RuntimeError("selected attribute identity changes across records")
+                filtered_targets = []
+                for row in selected_rows:
+                    target, was_masked = certainty_policy_target(row)
+                    certainty_policy_overrides_masked += int(was_masked)
+                    filtered_targets.append(target)
                 targets = [
-                    float(row["primary_target"])
-                    if row["primary_target"] is not None
-                    else float("nan")
-                    for row in selected_rows
+                    float(target) if target is not None else float("nan")
+                    for target in filtered_targets
                 ]
                 target_rows.append(torch.tensor(targets))
                 image_ids.append(image_id)
@@ -322,4 +328,5 @@ def load_stage_attribute_dataset(
         targets=torch.stack(target_rows),
         features={key: torch.stack(rows) for key, rows in feature_rows.items()},
         cache_config_digest=digest,
+        certainty_policy_overrides_masked=certainty_policy_overrides_masked,
     )

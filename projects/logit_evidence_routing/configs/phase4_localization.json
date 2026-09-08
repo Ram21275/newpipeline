@@ -17,6 +17,10 @@
     2
   ],
   "eligibility": "observed_positive_and_at_least_one_relevant_visible_in_crop_part",
+  "approved_certainty_names": [
+    "definitely",
+    "probably"
+  ],
   "cached_selectors": [
     "vision_cls_attention",
     "llm_attention",

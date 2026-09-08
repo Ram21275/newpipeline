@@ -10,6 +10,8 @@ Outputs are commit-specific and resume using per-image score caches. If a cell i
 
 The fixed protocol is `configs/phase4_localization.json`. It contains the existing 26 attribute identities, text queries, explicit landmark-proxy mappings, K=16/32 and random seeds 0/1/2. These choices precede the Phase 4 full development result. Do not tune them using its validation outcomes.
 
+Attribute targets are eligible only when certainty is explicitly `probably` or `definitely`. A legacy cache row with a non-null target and any other certainty is conservatively masked as `uncertain_or_missing`; `attribute_eligibility.csv` preserves the cached target, certainty, approval flag and override flag. The run report counts these overrides and sets `phase3_revalidation_required=true` when any occur, because Phase 3 must then be rerun with the same consumer-side allowlist before cross-phase interpretation. Representation tensors do not need to be re-extracted.
+
 # What the results mean
 
 There are two matched evaluations. Object localization compares Vision-CLS attention, LLM attention, corrected generic bird/birds Logit Lens, fusion, dense CLIP bird-query similarity, and random selection. Attribute localization adds the dense query for each named attribute, evaluated only on sufficiently certain positive labels with relevant visible in-crop landmark proxies. Generic attention/bird maps remain labeled generic controls; they are not attribute-conditioned maps.
@@ -34,7 +36,7 @@ Implementation validation performed locally uses synthetic tensors/metadata and 
 
 - `phase4_run_report.json`, `phase4_validation_report.json`, `evaluation_config.json`: computational gates, immutable protocol, dependency versions, commits and input hashes.
 - `object_metrics.csv`: 240 × 2 K values × (5 deterministic maps + 3 random seeds) = 3,840 rows.
-- `attribute_eligibility.csv`: 240 × 26 = 6,240 rows, with explicit exclusion reasons.
+- `attribute_eligibility.csv`: 240 × 26 = 6,240 rows, with explicit exclusion reasons and certainty-policy audit fields.
 - `attribute_metrics.csv`: 18 × E rows, where E is the eligible image/attribute pair count.
 - `selector_agreement.csv`: 13,440 + 72 × E rows; all unordered equal-K pairs, including random-seed pairs.
 - `localization_summary.csv`, `attribute_macro_summary.csv`, `attribute_support.csv`, `paired_selector_deltas.csv`, `selector_agreement_summary.csv`: separate development-train/validation summaries and denominators. No group or method pools train and validation results.

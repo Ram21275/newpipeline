@@ -130,12 +130,14 @@ class AttributeProbeTests(unittest.TestCase):
                                             "name": "has_crown_color::red",
                                             "group": "has_crown_color",
                                             "primary_target": bool(image_id % 2),
+                                            "certainty_name": "guess" if image_id == 1 else "probably",
                                         },
                                         {
                                             "attribute_id": 2,
                                             "name": "has_bill_shape::hooked",
                                             "group": "has_bill_shape",
                                             "primary_target": None,
+                                            "certainty_name": "not visible",
                                         },
                                     ],
                                 },
@@ -178,6 +180,8 @@ class AttributeProbeTests(unittest.TestCase):
                     pooling=("mean", "max"),
                 )
                 self.assertEqual(dataset.targets.shape, (240, 2))
+                self.assertTrue(torch.isnan(dataset.targets[0, 0]))
+                self.assertEqual(dataset.certainty_policy_overrides_masked, 1)
                 self.assertEqual(
                     dataset.features[("mean", "vision.final")].shape,
                     (240, 2),

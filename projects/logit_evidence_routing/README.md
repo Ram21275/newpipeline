@@ -377,3 +377,11 @@ Actual semantic/full-run results remain pending Kaggle execution. Local checks
 use synthetic inputs only. The earlier cached-map smoke does not complete Phase 4,
 and the new code does not invent results. Official test remains untouched; no
 causal transition has been selected.
+
+The first full Phase 4 attempt stopped safely at development image 575 after
+detecting a non-null cached target with certainty outside the frozen
+`probably`/`definitely` policy. The corrected runner masks such rows, records the
+count in its report, and reuses all representation caches. Rerun both Phase 4
+notebook cells from the latest commit. If the full report sets
+`phase3_revalidation_required=true`, rerun the Phase 3 probes with the corrected
+consumer-side label policy before making cross-phase claims.
