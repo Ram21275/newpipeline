@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "status": "PASS_DESCRIPTIVE_ONLY",
+  "review_date": "2026-09-11",
+  "experiment_commit": "4be3f2a473ae09dab0751d8436ed55bb723f4d95",
+  "protocol_digest": "329f3da83d062c2370cc91b70ae08c1c097e4dd6399a19aa09ca37970a14ebba",
+  "bundle_manifest_sha256": "db1219637723f34f08356fdbc5a0f2de5b095033b8ac3ecc3f8cae117b705b4a",
+  "phase4_run_report_sha256": "380440dc6d3efe199334ae243f647477c3b3f7f40efd70e01dbdc5db90181922",
+  "phase4_validation_report_sha256": "e1f1ee784eccf459e57ce6561a814b589bee1b64d9053cd9b6bda84c65ab4b6f",
+  "images_reviewed": 240,
+  "eligibility_rows_reviewed": 6240,
+  "eligible_image_attribute_pairs": 1251,
+  "unapproved_cached_targets_masked": 248,
+  "official_test_images_used": 0,
+  "numeric_review_complete": true,
+  "qualitative_panels_reviewed": true,
+  "phase3_revalidation_required": true,
+  "supported_result": "Selector-dependent complementary localization: generic bird/birds Logit Lens is the sharpest object-semantic localizer, while Vision-CLS attention provides the broadest attribute-landmark coverage.",
+  "leading_hypothesis_only": "discriminative_semantic_localization_mismatch",
+  "unsupported_claims": [
+    "causal use",
+    "representation utilization",
+    "information destruction",
+    "visual-to-language bottleneck",
+    "official-test generalization"
+  ]
+}

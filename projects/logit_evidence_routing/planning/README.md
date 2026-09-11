@@ -65,6 +65,9 @@ establish that generic logit confidence is a superior localizer on CUB.
 7. `05_MAIN_EXPERIMENTS.md` — layer-wise, spatial, semantic, and use measurements.
 8. `06_ABLATIONS_AND_ANALYSIS.md` — controls and alternative explanations.
 9. `07_ABSTRACT_DEADLINE.md` — claim gates and submission checklist.
+10. `08_PHASE4_LOCALIZATION_PROTOCOL.md` — frozen matched localization protocol.
+11. `09_MULTIPHASE_DEADLINE_EXECUTION.md` — CPU/GPU overlap, dependency gates,
+    causal targeting, held-out freeze, and paper-package generation.
 
 Do not begin causal intervention until `INTERMEDIATE_FINDINGS.md` identifies a
 specific transition worth testing. Do not begin with sparse autoencoders; add

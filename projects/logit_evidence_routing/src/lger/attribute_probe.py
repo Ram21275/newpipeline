@@ -36,6 +36,57 @@ class MultiLabelProbeResult:
     validation_logits: torch.Tensor
     thresholds: torch.Tensor
     train_loss: float
+    normalization_mean: torch.Tensor
+    normalization_scale: torch.Tensor
+    classifier_weight: torch.Tensor
+    classifier_bias: torch.Tensor
+
+
+def mean_pool_probe_patch_contributions(
+    patch_features: torch.Tensor,
+    result: MultiLabelProbeResult,
+    *,
+    thresholds: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """Decompose a mean-pooled linear probe margin into exact patch terms.
+
+    The returned tensor has shape ``[examples, patches, attributes]``.  Its
+    patch sum reconstructs either the raw classifier logit or, when
+    ``thresholds`` is supplied, the threshold-centered decision margin.  The
+    classifier bias (and optional threshold) is divided evenly over patches;
+    this convention makes the decomposition exact without implying that the
+    constant offset is spatial evidence.
+    """
+
+    if (
+        patch_features.ndim != 3
+        or patch_features.shape[-1] != result.classifier_weight.shape[1]
+    ):
+        raise ValueError(
+            "patch features must have shape [examples, patches, feature_dim]"
+        )
+    if patch_features.shape[1] == 0:
+        raise ValueError("at least one patch is required")
+    attributes = result.classifier_weight.shape[0]
+    if thresholds is not None and tuple(thresholds.shape) != (attributes,):
+        raise ValueError("thresholds must contain one value per attribute")
+    mean = result.normalization_mean.to(dtype=torch.float32)
+    scale = result.normalization_scale.to(dtype=torch.float32)
+    weight = result.classifier_weight.to(dtype=torch.float32)
+    bias = result.classifier_bias.to(dtype=torch.float32)
+    if (
+        mean.ndim != 1
+        or scale.shape != mean.shape
+        or mean.numel() != patch_features.shape[-1]
+    ):
+        raise ValueError("probe normalization parameters do not match patch features")
+    normalized = (patch_features.float() - mean) / scale
+    patch_count = patch_features.shape[1]
+    contributions = torch.einsum("npd,ad->npa", normalized, weight) / patch_count
+    offset = bias
+    if thresholds is not None:
+        offset = offset - thresholds.float()
+    return contributions + offset.view(1, 1, -1) / patch_count
 
 
 def binary_auroc(scores: torch.Tensor, targets: torch.Tensor) -> float:
@@ -203,6 +254,10 @@ def run_masked_multilabel_probe(
         validation_logits=validation_logits,
         thresholds=torch.tensor(thresholds),
         train_loss=float(loss.detach().cpu()),
+        normalization_mean=mean.squeeze(0).cpu(),
+        normalization_scale=scale.squeeze(0).cpu(),
+        classifier_weight=classifier.weight.detach().cpu(),
+        classifier_bias=classifier.bias.detach().cpu(),
     )
 
 

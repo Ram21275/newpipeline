@@ -19,6 +19,13 @@ The study separates:
 - direct semantic readability;
 - causal use by the final answer.
 
+For the deadline-oriented continuation after the reviewed Phase 4 development
+run, use `notebooks/multiphase_development_kaggle.ipynb`. It overlaps corrected
+Phase 3R probes on CPU with Phase 5 VQA on GPU, then runs the gated Phase 6/7
+analysis, freezes Phase 8 when justified, and creates paper-ready tables and a
+claim ledger. The exact dependency graph and interpretation boundaries are in
+`planning/09_MULTIPHASE_DEADLINE_EXECUTION.md`.
+
 ## Current Phase 01 status
 
 The valid development-pilot result is that Vision-CLS attention is a strong

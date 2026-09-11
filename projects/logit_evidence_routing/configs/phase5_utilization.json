@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "purpose": "phase5_development_representation_versus_utilization",
+  "cache_config_digest": "63cf0e80ec0a24533682467b6f3b23ccded8625ef25d2fb43d012aa0e72179d8",
+  "model": "llava-hf/llava-1.5-7b-hf",
+  "revision": "b234b804b114d9e37bb655e11cbbb5f5e971b7a9",
+  "quantization": "4bit",
+  "prompt_id": "cub_attribute_yes_no_v1",
+  "prompt_template": "Does the bird have {attribute_phrase}? Answer only yes or no.",
+  "positive_answer": "yes",
+  "negative_answer": "no",
+  "primary_metric": "teacher_forced_sequence_log_likelihood_margin",
+  "secondary_metric": "deterministic_generated_binary_accuracy",
+  "controls": [
+    "image",
+    "prompt_only",
+    "image_shuffled"
+  ],
+  "development_evaluation_split": "val",
+  "cohorts": [
+    "grounded_positive",
+    "grounded_negative"
+  ],
+  "label_balancing": "attribute_stratified_without_replacement_to_smaller_grounded_label_count",
+  "label_balancing_seed": 1729,
+  "image_shuffle": "attribute_stratified_cyclic_derangement",
+  "image_shuffle_seed": 2718,
+  "require_visible_relevant_part_for_both_labels": true,
+  "question_conditioned_llm_attention": true,
+  "attention_layer_offset": -2,
+  "max_new_tokens": 3,
+  "official_test_images_used": 0,
+  "interpretation_boundary": "Answer behavior measures utilization, while prompt attention remains a routing diagnostic and not causal evidence."
+}

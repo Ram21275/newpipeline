@@ -10,6 +10,7 @@ import torch
 from lger.attribute_probe import (
     binary_auroc,
     load_stage_attribute_dataset,
+    mean_pool_probe_patch_contributions,
     random_project_features,
     run_masked_multilabel_probe,
     select_training_f1_threshold,
@@ -76,6 +77,40 @@ class AttributeProbeTests(unittest.TestCase):
         self.assertEqual(result.validation_logits.shape, (6, 2))
         self.assertEqual(result.thresholds.shape, (2,))
         self.assertTrue(torch.isfinite(result.thresholds).all())
+        self.assertEqual(result.classifier_weight.shape, (2, 1))
+        self.assertEqual(result.classifier_bias.shape, (2,))
+        self.assertEqual(result.normalization_mean.shape, (1,))
+
+    def test_mean_pool_probe_decomposition_reconstructs_margin(self) -> None:
+        patch_features = torch.tensor(
+            [
+                [[-2.0], [-1.0]],
+                [[-0.5], [0.5]],
+                [[1.0], [2.0]],
+                [[2.0], [3.0]],
+            ]
+        )
+        targets = torch.tensor([[0.0], [0.0], [1.0], [1.0]])
+        result = run_masked_multilabel_probe(
+            patch_features.mean(dim=1),
+            targets,
+            patch_features.mean(dim=1),
+            seed=3,
+            epochs=40,
+            learning_rate=0.05,
+            weight_decay=0.0,
+            device=torch.device("cpu"),
+        )
+        contributions = mean_pool_probe_patch_contributions(
+            patch_features, result, thresholds=result.thresholds
+        )
+        self.assertEqual(contributions.shape, (4, 2, 1))
+        torch.testing.assert_close(
+            contributions.sum(dim=1).squeeze(1),
+            result.validation_logits.squeeze(1) - result.thresholds[0],
+            rtol=1e-5,
+            atol=1e-5,
+        )
 
     def test_cache_reader_loads_only_requested_stage_tensors(self) -> None:
         class FakeSafeOpen:

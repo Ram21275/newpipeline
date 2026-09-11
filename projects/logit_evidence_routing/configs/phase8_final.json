@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "purpose": "phase8_untouched_official_test_confirmation",
+  "dataset": "CUB-200-2011",
+  "sampling_frame": "official_test_images_from_development_pilot_classes",
+  "images_per_class": 12,
+  "sampling_seed": 8675309,
+  "primary_answer_metric": "teacher_forced_correct_answer_margin",
+  "primary_causal_contrast": "top_evidence_margin_drop_minus_matched_random_margin_drop",
+  "secondary_causal_contrast": "top_evidence_margin_drop_minus_low_evidence_margin_drop",
+  "cluster_unit": "image_id",
+  "bootstrap_replicates": 10000,
+  "confidence_level": 0.95,
+  "test_access_requires_frozen_protocol": true,
+  "development_results_may_not_change_after_test_access": true
+}

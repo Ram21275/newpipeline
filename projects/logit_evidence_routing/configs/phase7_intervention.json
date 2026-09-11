@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "purpose": "phase7_targeted_matched_causal_intervention",
+  "decision_prompt_id": "cub_attribute_yes_no_v1",
+  "selection_k": 32,
+  "replacement": "development_train_stage_mean",
+  "intervention_types": [
+    "top_evidence",
+    "matched_random",
+    "low_evidence"
+  ],
+  "matched_random_seeds": [
+    0,
+    1,
+    2
+  ],
+  "matching_strata": [
+    "bird_box_membership",
+    "hidden_state_norm_quartile"
+  ],
+  "stages": "selected_development_transition_and_one_causal_neighbor",
+  "primary_outcome": "change_in_correct_answer_teacher_forced_margin",
+  "secondary_outcomes": [
+    "change_in_generated_binary_accuracy",
+    "change_in_unrelated_attribute_margin"
+  ],
+  "bootstrap_unit": "image_id",
+  "bootstrap_replicates": 10000,
+  "confidence_level": 0.95,
+  "bootstrap_seed": 314159,
+  "official_test_images_used": 0,
+  "null_result_is_valid": true
+}
