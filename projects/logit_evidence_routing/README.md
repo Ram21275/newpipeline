@@ -424,7 +424,12 @@ images. These replications strengthen model or dataset generality only when
 reported with their full null/mixed outcomes; they do not revise the original
 Phase 8 claim.
 
-The complete Kaggle sequence is provided as an importable
-[`KAGGLE_FOLLOWUP_EXECUTABLE_CELLS.ipynb`](notebooks/KAGGLE_FOLLOWUP_EXECUTABLE_CELLS.ipynb)
-and as individually copyable `%%bash` cells in the
-[`Markdown runbook`](notebooks/KAGGLE_FOLLOWUP_EXECUTABLE_CELLS.md).
+The recommended Kaggle sequence is the importable four-cell
+[`KAGGLE_FOLLOWUP_COMPACT.ipynb`](notebooks/KAGGLE_FOLLOWUP_COMPACT.ipynb),
+also available as a short
+[`Markdown runbook`](notebooks/KAGGLE_FOLLOWUP_COMPACT.md). Its resumable runner
+keeps the smoke, pilot, full-run, report, and official-test-use gates while
+printing the exact failed stage and command. The detailed 31-cell
+[`debugging notebook`](notebooks/KAGGLE_FOLLOWUP_EXECUTABLE_CELLS.ipynb) and
+[`debugging runbook`](notebooks/KAGGLE_FOLLOWUP_EXECUTABLE_CELLS.md) remain for
+isolating individual steps.

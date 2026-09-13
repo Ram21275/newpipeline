@@ -91,9 +91,11 @@ They do not load a model.
 %%bash
 set -euo pipefail
 PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
-python3 -m pip install -q -r "$PROJECT/requirements-kaggle.txt"
 cd "$PROJECT"
-PYTHONPYCACHEPREFIX=/tmp/lger_pycache python3 -m pytest -q
+# The editable requirement (-e .[dev,kaggle]) resolves from this directory.
+trap 'echo "FAILED at line $LINENO: $BASH_COMMAND" >&2' ERR
+python3 -m pip install -r "$PROJECT/requirements-kaggle.txt"
+PYTHONPYCACHEPREFIX=/tmp/lger_pycache python3 -m pytest -ra --tb=short
 ```
 
 ## Cell 5 — validate scientific inputs and find CUB automatically
