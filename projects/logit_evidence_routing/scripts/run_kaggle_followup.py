@@ -640,6 +640,10 @@ def parser() -> argparse.ArgumentParser:
     commands = result.add_subparsers(dest="command", required=True)
     prepare = commands.add_parser("prepare", help="install, test, validate caches, and build plans")
     prepare.add_argument("--skip-tests", action="store_true")
+    commands.add_parser(
+        "prepare-celeba",
+        help="prepare only the optional CelebA manifests after a late prepare-stage failure",
+    )
     commands.add_parser("llava", help="run gated Phase 9 and LLaVA replications")
     qwen = commands.add_parser("qwen", help="run gated Qwen replications and package outputs")
     qwen.add_argument("--clear-llava-checkpoint", action="store_true")
@@ -652,6 +656,8 @@ def main(argv: list[str] | None = None) -> None:
     workflow = Workflow(args.working_root, args.input_root, args.celeba)
     if args.command == "prepare":
         workflow.prepare(skip_tests=args.skip_tests)
+    elif args.command == "prepare-celeba":
+        workflow.prepare_celeba()
     elif args.command == "llava":
         workflow.llava()
     elif args.command == "qwen":

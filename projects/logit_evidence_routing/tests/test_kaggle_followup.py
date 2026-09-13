@@ -83,6 +83,10 @@ class CompactWorkflowTests(unittest.TestCase):
         prepare = command.parse_args(["--notebook-safe", "prepare", "--skip-tests"])
         self.assertEqual(prepare.command, "prepare")
         self.assertTrue(prepare.notebook_safe)
+        self.assertEqual(
+            command.parse_args(["--celeba", "yes", "prepare-celeba"]).command,
+            "prepare-celeba",
+        )
         self.assertEqual(command.parse_args(["llava"]).command, "llava")
         qwen = command.parse_args(["qwen", "--clear-llava-checkpoint"])
         self.assertTrue(qwen.clear_llava_checkpoint)

@@ -29,6 +29,9 @@ exports the Phase 9 selector metadata, builds the fixed plan and opposite-label
 controls, and prepares CelebA when attached. If the CPU suite already passed on
 this exact commit, add `--skip-tests` after `prepare`.
 
+If Cell 1 previously reached only the final CelebA preparation stage, pull the
+latest branch and use `--celeba yes prepare-celeba` to rerun that stage alone.
+
 ## Cell 2 — run all gated LLaVA work
 
 ```bash
