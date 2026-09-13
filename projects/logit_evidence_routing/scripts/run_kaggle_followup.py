@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import traceback
+from collections import deque
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -116,14 +117,28 @@ class Workflow:
         process_env = os.environ.copy()
         if env:
             process_env.update(env)
-        try:
-            subprocess.run(command, cwd=cwd, env=process_env, check=True)
-        except subprocess.CalledProcessError as error:
+        process = subprocess.Popen(
+            command, cwd=cwd, env=process_env,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, bufsize=1,
+        )
+        output_tail: deque[str] = deque(maxlen=200)
+        assert process.stdout is not None
+        for line in process.stdout:
+            print(line, end="", flush=True)
+            output_tail.append(line)
+        process.stdout.close()
+        return_code = process.wait()
+        if return_code != 0:
             print(f"\nFAILED STAGE: {stage}", file=sys.stderr, flush=True)
             print(f"FAILED COMMAND: {shlex.join(command)}", file=sys.stderr, flush=True)
             print("Fix the reported error, then rerun this same compact cell; completed outputs resume.",
                   file=sys.stderr, flush=True)
-            raise WorkflowError(f"{stage} exited with status {error.returncode}") from error
+            error = WorkflowError(f"{stage} exited with status {return_code}")
+            error.stage = stage
+            error.failed_command = command
+            error.output_tail = "".join(output_tail)
+            raise error
 
     def require_cub(self) -> Path:
         require(self.cub_root is not None, f"CUB_200_2011 was not found below {self.inputs}")
@@ -545,6 +560,10 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--input-root", type=Path, default=Path("/kaggle/input"))
     result.add_argument("--celeba", choices=("auto", "yes", "no"), default="auto",
                         help="auto runs CelebA only when its in-the-wild layout is attached")
+    result.add_argument(
+        "--notebook-safe", action="store_true",
+        help="print and save failures without replacing useful output with an IPython wrapper",
+    )
     commands = result.add_subparsers(dest="command", required=True)
     prepare = commands.add_parser("prepare", help="install, test, validate caches, and build plans")
     prepare.add_argument("--skip-tests", action="store_true")
@@ -568,11 +587,41 @@ def main(argv: list[str] | None = None) -> None:
         workflow.status()
 
 
+def notebook_failure_path(argv: list[str]) -> Path:
+    working_root = Path("/kaggle/working")
+    for index, argument in enumerate(argv):
+        if argument == "--working-root" and index + 1 < len(argv):
+            working_root = Path(argv[index + 1])
+        elif argument.startswith("--working-root="):
+            working_root = Path(argument.split("=", 1)[1])
+    return working_root / "lger_compact_last_failure.json"
+
+
 if __name__ == "__main__":
+    notebook_safe = "--notebook-safe" in sys.argv[1:]
+    failure_path = notebook_failure_path(sys.argv[1:])
     try:
         main()
     except Exception as error:
         if not isinstance(error, WorkflowError) or error.__cause__ is None:
             traceback.print_exc()
         print(f"\nCOMPACT WORKFLOW FAILED: {error}", file=sys.stderr, flush=True)
-        raise SystemExit(1) from error
+        if notebook_safe:
+            failure_path.parent.mkdir(parents=True, exist_ok=True)
+            failure_path.write_text(json.dumps({
+                "status": "FAILED",
+                "error_type": type(error).__name__,
+                "error": str(error),
+                "traceback": traceback.format_exc(),
+                "command": sys.argv[1:],
+                "failed_stage": getattr(error, "stage", None),
+                "failed_command": getattr(error, "failed_command", None),
+                "subprocess_output_tail": getattr(error, "output_tail", ""),
+            }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            print(f"DIAGNOSTIC SAVED: {failure_path}", file=sys.stderr, flush=True)
+            print("STOP HERE. Do not run the next compact cell.", file=sys.stderr, flush=True)
+        else:
+            raise SystemExit(1) from error
+    else:
+        if notebook_safe:
+            failure_path.unlink(missing_ok=True)

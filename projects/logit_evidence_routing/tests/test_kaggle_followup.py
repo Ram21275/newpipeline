@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -45,11 +47,42 @@ class CompactWorkflowTests(unittest.TestCase):
 
     def test_compact_cli_has_four_resumable_stages(self):
         command = COMPACT.parser()
-        self.assertEqual(command.parse_args(["prepare", "--skip-tests"]).command, "prepare")
+        prepare = command.parse_args(["--notebook-safe", "prepare", "--skip-tests"])
+        self.assertEqual(prepare.command, "prepare")
+        self.assertTrue(prepare.notebook_safe)
         self.assertEqual(command.parse_args(["llava"]).command, "llava")
         qwen = command.parse_args(["qwen", "--clear-llava-checkpoint"])
         self.assertTrue(qwen.clear_llava_checkpoint)
         self.assertEqual(command.parse_args(["status"]).command, "status")
+
+    def test_notebook_safe_failure_returns_zero_and_saves_diagnostic(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            working, inputs = root / "working", root / "input"
+            inputs.mkdir()
+            result = subprocess.run([
+                sys.executable, str(PROJECT / "scripts" / "run_kaggle_followup.py"),
+                "--working-root", str(working), "--input-root", str(inputs),
+                "--notebook-safe", "prepare", "--skip-tests",
+            ], check=False, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0)
+            failure = working / "lger_compact_last_failure.json"
+            self.assertTrue(failure.is_file())
+            report = json.loads(failure.read_text(encoding="utf-8"))
+            self.assertEqual(report["status"], "FAILED")
+            self.assertIn("CUB_200_2011", report["error"])
+            self.assertIn("STOP HERE", result.stderr)
+
+    def test_failed_stage_retains_subprocess_output_tail(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workflow = COMPACT.Workflow(root / "working", root / "input", "no")
+            with self.assertRaises(COMPACT.WorkflowError) as raised:
+                workflow.run("synthetic failure", [
+                    sys.executable, "-c", "print('specific child error'); raise SystemExit(7)",
+                ])
+            self.assertEqual(raised.exception.stage, "synthetic failure")
+            self.assertIn("specific child error", raised.exception.output_tail)
 
     def test_archive_hash_is_verified_before_checkpoint_cleanup(self):
         with tempfile.TemporaryDirectory() as directory:

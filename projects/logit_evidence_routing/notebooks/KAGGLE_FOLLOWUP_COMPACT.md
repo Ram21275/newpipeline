@@ -12,15 +12,13 @@ runs automatically only when a valid in-the-wild CelebA layout is attached.
 
 ```bash
 %%bash
-set -Eeuo pipefail
-trap 'echo "FAILED at line $LINENO: $BASH_COMMAND" >&2' ERR
 REPO=/kaggle/working/newpipeline
-git -C "$REPO" fetch origin feat/iclr
-git -C "$REPO" checkout feat/iclr
-git -C "$REPO" pull --ff-only origin feat/iclr
+git -C "$REPO" fetch origin feat/iclr || { echo "GIT FETCH FAILED"; exit 0; }
+git -C "$REPO" checkout feat/iclr || { echo "GIT CHECKOUT FAILED"; exit 0; }
+git -C "$REPO" pull --ff-only origin feat/iclr || { echo "GIT PULL FAILED"; exit 0; }
 PROJECT="$REPO/projects/logit_evidence_routing"
 cd "$PROJECT"
-python3 scripts/run_kaggle_followup.py --celeba auto prepare
+python3 scripts/run_kaggle_followup.py --notebook-safe --celeba auto prepare
 ```
 
 This cell prints storage availability, installs from the correct project
@@ -33,9 +31,8 @@ this exact commit, add `--skip-tests` after `prepare`.
 
 ```bash
 %%bash
-set -Eeuo pipefail
 PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
-python3 "$PROJECT/scripts/run_kaggle_followup.py" --celeba auto llava
+python3 "$PROJECT/scripts/run_kaggle_followup.py" --notebook-safe --celeba auto llava
 ```
 
 This runs Phase 9 smoke → pilot → full → analysis, then CUB LLaVA smoke →
@@ -47,9 +44,8 @@ before this cell reports success.
 
 ```bash
 %%bash
-set -Eeuo pipefail
 PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
-python3 "$PROJECT/scripts/run_kaggle_followup.py" --celeba auto qwen \
+python3 "$PROJECT/scripts/run_kaggle_followup.py" --notebook-safe --celeba auto qwen \
   --clear-llava-checkpoint
 ```
 
@@ -62,14 +58,14 @@ renders figures, and creates the final archive and SHA-256 sidecar.
 
 ```bash
 %%bash
-set -Eeuo pipefail
 PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
-python3 "$PROJECT/scripts/run_kaggle_followup.py" --celeba auto status
+python3 "$PROJECT/scripts/run_kaggle_followup.py" --notebook-safe --celeba auto status
 ```
 
-Do not continue to the next cell unless the current cell ends in `PASS`. On a
-failure, look for `FAILED STAGE` and `FAILED COMMAND` near the bottom of the
-output; the underlying Python traceback appears immediately above them.
+Do not continue to the next cell unless the current cell ends in `PASS`. The
+notebook-safe mode prevents IPython's generic `CalledProcessError` from hiding
+the useful output. A failure ends with `COMPACT WORKFLOW FAILED`, saves
+`/kaggle/working/lger_compact_last_failure.json`, and tells you to stop.
 
 The detailed 31-cell notebook remains available for isolated debugging or
 manual storage cleanup.
