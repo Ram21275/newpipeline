@@ -408,6 +408,10 @@ The execution order is:
 2. `run_phase9_mechanism.py plan` creates the deterministic intervention plan.
 3. `extract_phase9_llava_interventions.py` runs smoke, pilot, then full modes.
 4. `run_phase9_mechanism.py aggregate` analyzes the full outcomes.
+5. `analyze_replication_vqa.py` reports control summaries, conservative tie
+   rates, paired image-cluster bootstrap intervals, and cross-model contrasts.
+6. `plot_followup_results.py` saves the Phase 9 and cross-model intervals as
+   paper-ready PNG and PDF figures.
 
 The cross-model utilization replication adds an opposite-label donor control.
 Run `extract_replication_vqa.py` with
@@ -419,3 +423,7 @@ image per identity, objective landmark-proxy attributes, and no official-test
 images. These replications strengthen model or dataset generality only when
 reported with their full null/mixed outcomes; they do not revise the original
 Phase 8 claim.
+
+The complete Kaggle sequence is provided as individually copyable `%%bash`
+cells in
+[`notebooks/KAGGLE_FOLLOWUP_EXECUTABLE_CELLS.md`](notebooks/KAGGLE_FOLLOWUP_EXECUTABLE_CELLS.md).
