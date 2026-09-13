@@ -424,6 +424,7 @@ images. These replications strengthen model or dataset generality only when
 reported with their full null/mixed outcomes; they do not revise the original
 Phase 8 claim.
 
-The complete Kaggle sequence is provided as individually copyable `%%bash`
-cells in
-[`notebooks/KAGGLE_FOLLOWUP_EXECUTABLE_CELLS.md`](notebooks/KAGGLE_FOLLOWUP_EXECUTABLE_CELLS.md).
+The complete Kaggle sequence is provided as an importable
+[`KAGGLE_FOLLOWUP_EXECUTABLE_CELLS.ipynb`](notebooks/KAGGLE_FOLLOWUP_EXECUTABLE_CELLS.ipynb)
+and as individually copyable `%%bash` cells in the
+[`Markdown runbook`](notebooks/KAGGLE_FOLLOWUP_EXECUTABLE_CELLS.md).
