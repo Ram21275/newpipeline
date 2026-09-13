@@ -6,7 +6,9 @@ official-test-use gate from the detailed 31-cell runbook. Completed outputs are
 resumable, so rerun the same cell after fixing a failure.
 
 Use a Kaggle GPU session with Internet enabled. The optional CelebA replication
-runs automatically only when a valid in-the-wild CelebA layout is attached.
+runs automatically only when a valid in-the-wild CelebA layout is attached. The
+compact protocol deterministically selects 100 training and 50 validation images
+from the official development partitions and never reads official test images.
 
 ## Cell 1 — update, install, test, and prepare all cache-only inputs
 

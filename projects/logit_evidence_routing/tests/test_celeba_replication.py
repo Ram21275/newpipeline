@@ -6,6 +6,7 @@ import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -35,6 +36,19 @@ class CelebASamplingTests(unittest.TestCase):
             self.assertEqual(
                 MODULE.resolve_image_subdirectory(root, "Img/img_celeba"),
                 "img_celeba",
+            )
+
+    def test_official_partition_uses_annotation_index_without_image_scan(self):
+        with (
+            mock.patch.object(MODULE, "CELEBA_IMAGE_COUNT", 3),
+            mock.patch.object(MODULE, "CELEBA_TRAIN_END", 1),
+            mock.patch.object(MODULE, "CELEBA_VALID_END", 2),
+        ):
+            self.assertEqual(
+                MODULE.official_partition_from_filenames(
+                    ["000001.jpg", "000002.jpg", "000003.jpg"]
+                ),
+                {"000001.jpg": 0, "000002.jpg": 1, "000003.jpg": 2},
             )
 
     def test_balanced_sample_is_deterministic_and_identity_unique(self):

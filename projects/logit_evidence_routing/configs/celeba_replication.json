@@ -9,8 +9,8 @@
   "max_images_per_identity": 1,
   "require_identity_disjoint_splits": true,
   "sampling_seed": 260913,
-  "development_train_images": 800,
-  "development_validation_images": 400,
+  "development_train_images": 100,
+  "development_validation_images": 50,
   "planned_untouched_test_images": 400,
   "official_test_images_used": 0,
   "selected_attributes": [

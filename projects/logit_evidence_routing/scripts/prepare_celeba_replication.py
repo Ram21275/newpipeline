@@ -10,7 +10,7 @@ import json
 import random
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -71,17 +71,14 @@ def official_partition_for_filename(filename: str) -> int:
     return 2
 
 
-def official_partition_from_image_directory(image_directory: Path) -> dict[str, int]:
+def official_partition_from_filenames(filenames: Iterable[str]) -> dict[str, int]:
     """Reconstruct CelebA's published contiguous official filename partitions."""
-    image_names = [path.name for path in image_directory.iterdir() if path.is_file()]
-    if len(image_names) != CELEBA_IMAGE_COUNT:
+    partition = {name: official_partition_for_filename(name) for name in filenames}
+    if len(partition) != CELEBA_IMAGE_COUNT:
         raise RuntimeError(
             "CelebA package lacks list_eval_partition.txt and does not contain exactly "
-            f"{CELEBA_IMAGE_COUNT} in-the-wild images"
+            f"{CELEBA_IMAGE_COUNT} canonical annotation rows"
         )
-    partition = {name: official_partition_for_filename(name) for name in image_names}
-    if len(partition) != CELEBA_IMAGE_COUNT:
-        raise RuntimeError("CelebA in-the-wild image filenames are not unique")
     return partition
 
 
@@ -95,21 +92,32 @@ def simple_map(path: Path) -> dict[str, int]:
     return result
 
 
-def annotation_table(path: Path, allowed_files: set[str]) -> tuple[list[str], dict[str, list[int]]]:
-    lines = path.read_text(encoding="utf-8").splitlines()
-    if len(lines) < 3:
-        raise RuntimeError(f"malformed CelebA annotation table: {path}")
-    count = int(lines[0].strip())
-    names = lines[1].split()
-    rows = {}
-    for line in lines[2:]:
-        parts = line.split()
-        if not parts or parts[0] not in allowed_files:
-            continue
-        values = [int(value) for value in parts[1:]]
-        if len(values) != len(names):
-            raise RuntimeError(f"annotation width differs: {parts[0]}")
-        rows[parts[0]] = values
+def annotation_table(
+    path: Path,
+    allowed_files: set[str],
+    selected_names: list[str] | None = None,
+) -> tuple[list[str], dict[str, list[int]]]:
+    rows: dict[str, list[int]] = {}
+    with path.open(encoding="utf-8") as handle:
+        count_line = handle.readline()
+        names_line = handle.readline()
+        if not count_line or not names_line:
+            raise RuntimeError(f"malformed CelebA annotation table: {path}")
+        count = int(count_line.strip())
+        source_names = names_line.split()
+        names = selected_names or source_names
+        missing = set(names) - set(source_names)
+        if missing:
+            raise RuntimeError(f"CelebA annotation table lacks columns: {sorted(missing)}")
+        indices = [source_names.index(name) for name in names]
+        for line in handle:
+            parts = line.split()
+            if not parts or parts[0] not in allowed_files:
+                continue
+            source_values = parts[1:]
+            if len(source_values) != len(source_names):
+                raise RuntimeError(f"annotation width differs: {parts[0]}")
+            rows[parts[0]] = [int(source_values[index]) for index in indices]
     if count < len(rows):
         raise RuntimeError("CelebA annotation count is inconsistent")
     return names, rows
@@ -210,31 +218,28 @@ def main() -> None:
     bbox_path = first_existing(args.celeba_root, [
         "Anno/list_bbox_celeba.txt", "list_bbox_celeba.txt"
     ])
+    identity = simple_map(identity_path)
     if partition_path is None:
-        partition = official_partition_from_image_directory(image_directory)
+        # The Kaggle non-aligned package omits this small metadata file. Its
+        # identity table contains the same complete canonical filename index,
+        # so validate that index and apply CelebA's published official ranges.
+        partition = official_partition_from_filenames(identity)
         partition_source = "published_official_filename_ranges"
     else:
         partition = simple_map(partition_path)
         partition_source = str(partition_path.relative_to(args.celeba_root))
-    identity = simple_map(identity_path)
     # Official test rows are excluded before attribute or landmark values are parsed.
     development_files = {name for name, value in partition.items() if value in (0, 1)}
-    attr_names, attrs = annotation_table(
-        attribute_path, development_files
-    )
-    landmark_names, landmarks = annotation_table(
-        landmark_path, development_files
-    )
-    bbox_names, boxes = annotation_table(
-        bbox_path, development_files
-    )
     selected = [row["name"] for row in config["selected_attributes"]]
+    attr_names, attrs = annotation_table(
+        attribute_path, development_files, selected
+    )
     if not set(selected) <= set(attr_names):
         raise RuntimeError(f"CelebA lacks selected attributes: {set(selected) - set(attr_names)}")
     attr_index = {name: index for index, name in enumerate(attr_names)}
     candidates: dict[int, list[dict[str, Any]]] = {0: [], 1: []}
     for filename in sorted(development_files):
-        if filename not in identity or filename not in attrs or filename not in landmarks or filename not in boxes:
+        if filename not in identity or filename not in attrs:
             raise RuntimeError(f"CelebA annotations are incomplete for {filename}")
         candidates[partition[filename]].append({
             "filename": filename,
@@ -242,8 +247,6 @@ def main() -> None:
             "attributes": {
                 name: int(attrs[filename][attr_index[name]] > 0) for name in selected
             },
-            "bbox": dict(zip(bbox_names, boxes[filename])),
-            "landmarks": dict(zip(landmark_names, landmarks[filename])),
         })
 
     train = balanced_identity_sample(
@@ -258,6 +261,18 @@ def main() -> None:
     )
     if train_ids & {row["identity_id"] for row in valid}:
         raise RuntimeError("CelebA development splits are not identity-disjoint")
+
+    selected_files = {row["filename"] for row in (*train, *valid)}
+    landmark_names, landmarks = annotation_table(landmark_path, selected_files)
+    bbox_names, boxes = annotation_table(bbox_path, selected_files)
+    for row in (*train, *valid):
+        filename = row["filename"]
+        if filename not in landmarks or filename not in boxes:
+            raise RuntimeError(f"CelebA spatial annotations are incomplete for {filename}")
+        if not (image_directory / filename).is_file():
+            raise RuntimeError(f"selected CelebA image is missing: {image_directory / filename}")
+        row["bbox"] = dict(zip(bbox_names, boxes[filename]))
+        row["landmarks"] = dict(zip(landmark_names, landmarks[filename]))
 
     image_rows = []
     decision_rows = []
