@@ -51,6 +51,20 @@ class CelebASamplingTests(unittest.TestCase):
                 {"000001.jpg": 0, "000002.jpg": 1, "000003.jpg": 2},
             )
 
+    def test_annotation_table_accepts_image_id_header(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "list_bbox_celeba.txt"
+            path.write_text(
+                "2\n"
+                "image_id x_1 y_1 width height\n"
+                "000001.jpg 10 20 30 40\n"
+                "000002.jpg 11 21 31 41\n",
+                encoding="utf-8",
+            )
+            names, rows = MODULE.annotation_table(path, {"000002.jpg"})
+            self.assertEqual(names, ["x_1", "y_1", "width", "height"])
+            self.assertEqual(rows, {"000002.jpg": [11, 21, 31, 41]})
+
     def test_balanced_sample_is_deterministic_and_identity_unique(self):
         candidates = []
         for index in range(40):

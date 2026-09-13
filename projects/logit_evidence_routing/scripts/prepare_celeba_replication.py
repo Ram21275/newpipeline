@@ -105,6 +105,8 @@ def annotation_table(
             raise RuntimeError(f"malformed CelebA annotation table: {path}")
         count = int(count_line.strip())
         source_names = names_line.split()
+        if source_names and source_names[0].lower() in {"image_id", "filename"}:
+            source_names = source_names[1:]
         names = selected_names or source_names
         missing = set(names) - set(source_names)
         if missing:

@@ -188,11 +188,16 @@ class Workflow:
         process.stdout.close()
         return_code = process.wait()
         if return_code != 0:
+            detail_lines = [line.strip() for line in output_tail if line.strip()]
+            detail = detail_lines[-1] if detail_lines else "no subprocess output"
             print(f"\nFAILED STAGE: {stage}", file=sys.stderr, flush=True)
             print(f"FAILED COMMAND: {shlex.join(command)}", file=sys.stderr, flush=True)
+            print(f"FAILED DETAIL: {detail}", file=sys.stderr, flush=True)
             print("Fix the reported error, then rerun this same compact cell; completed outputs resume.",
                   file=sys.stderr, flush=True)
-            error = WorkflowError(f"{stage} exited with status {return_code}")
+            error = WorkflowError(
+                f"{stage} exited with status {return_code}: {detail}"
+            )
             error.stage = stage
             error.failed_command = command
             error.output_tail = "".join(output_tail)

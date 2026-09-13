@@ -120,6 +120,7 @@ class CompactWorkflowTests(unittest.TestCase):
                 ])
             self.assertEqual(raised.exception.stage, "synthetic failure")
             self.assertIn("specific child error", raised.exception.output_tail)
+            self.assertIn("specific child error", str(raised.exception))
 
     def test_silent_subprocess_emits_workflow_heartbeat(self):
         with tempfile.TemporaryDirectory() as directory:
