@@ -417,19 +417,19 @@ The cross-model utilization replication adds an opposite-label donor control.
 Run `extract_replication_vqa.py` with
 `configs/llava_full_replication.json` first and
 `configs/qwen25vl_7b_replication.json` second. Qwen uses a separate pinned
-Transformers environment in `requirements-qwen-kaggle.txt`. The CelebA
-development manifest builder is `prepare_celeba_replication.py`; it uses one
-image per identity, objective landmark-proxy attributes, and no official-test
-images. These replications strengthen model or dataset generality only when
-reported with their full null/mixed outcomes; they do not revise the original
-Phase 8 claim.
+Transformers environment in `requirements-qwen-kaggle.txt`. The active compact
+continuation is CUB-200-2011 only and requires `--celeba no` for every command.
+These replications strengthen model generality only when reported with their
+full null/mixed outcomes; they do not revise the original Phase 8 claim.
 
 The recommended Kaggle sequence is the importable four-cell
 [`KAGGLE_FOLLOWUP_COMPACT.ipynb`](notebooks/KAGGLE_FOLLOWUP_COMPACT.ipynb),
 also available as a short
 [`Markdown runbook`](notebooks/KAGGLE_FOLLOWUP_COMPACT.md). Its resumable runner
-keeps the smoke, pilot, full-run, report, and official-test-use gates while
-printing the exact failed stage and command. The detailed 31-cell
+keeps the smoke, pilot, full-run, report, hash, exact-tie, and official-test-use
+gates while printing the exact failed stage and command. It verifies the
+retained CUB preparation before loading a model and skips completed GPU stages
+only after their identities, counts, and hashes pass. The detailed 31-cell
 [`debugging notebook`](notebooks/KAGGLE_FOLLOWUP_EXECUTABLE_CELLS.ipynb) and
 [`debugging runbook`](notebooks/KAGGLE_FOLLOWUP_EXECUTABLE_CELLS.md) remain for
 isolating individual steps.

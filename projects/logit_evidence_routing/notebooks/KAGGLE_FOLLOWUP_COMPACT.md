@@ -1,79 +1,95 @@
-# Compact Kaggle follow-up: four cells
+# CUB-only Kaggle continuation: four cells
 
-This is the short execution path for the development-only Phase 9 and
-cross-model follow-up. It preserves every smoke, pilot, full-run, report, and
-official-test-use gate from the detailed 31-cell runbook. Completed outputs are
-resumable, so rerun the same cell after fixing a failure.
+This is the short execution path for the retained CUB-200-2011 development
+artifacts. It preserves every smoke, pilot, full-run, report, hash, and
+official-test-use gate from the detailed runbook. Completed GPU outputs are
+resumable and are skipped only after their identities, counts, and hashes pass.
 
-Use a Kaggle GPU session with Internet enabled. The optional CelebA replication
-runs automatically only when a valid in-the-wild CelebA layout is attached. The
-compact protocol deterministically selects 100 training and 50 validation images
-from the official development partitions and never reads official test images.
+Use a Kaggle GPU session with Internet enabled. Every command explicitly uses
+`--celeba no`; this continuation never searches for, prepares, runs, analyzes,
+or packages CelebA. The frozen Phase 8 protocol is unchanged and official-test
+image use must remain zero.
 
-## Cell 1 — update, install, test, and prepare all cache-only inputs
+## Cell 1 — update and verify the retained CUB preparation
 
 ```bash
 %%bash
+set -Eeuo pipefail
 REPO=/kaggle/working/newpipeline
-git -C "$REPO" fetch origin feat/iclr || { echo "GIT FETCH FAILED"; exit 0; }
-git -C "$REPO" checkout feat/iclr || { echo "GIT CHECKOUT FAILED"; exit 0; }
-git -C "$REPO" pull --ff-only origin feat/iclr || { echo "GIT PULL FAILED"; exit 0; }
+git -C "$REPO" fetch origin feat/iclr
+git -C "$REPO" checkout feat/iclr
+git -C "$REPO" pull --ff-only origin feat/iclr
 PROJECT="$REPO/projects/logit_evidence_routing"
-cd "$PROJECT"
-PYTHONUNBUFFERED=1 python3 -u scripts/run_kaggle_followup.py --notebook-safe --celeba auto prepare
+PYTHONUNBUFFERED=1 python3 -u \
+  "$PROJECT/scripts/run_kaggle_followup.py" \
+  --notebook-safe --celeba no preflight
 ```
 
-This cell prints storage availability, installs from the correct project
-directory, runs the CPU suite, validates retained development-only artifacts,
-exports the Phase 9 selector metadata, builds the fixed plan and opposite-label
-controls, and prepares CelebA when attached. If the CPU suite already passed on
-this exact commit, add `--skip-tests` after `prepare`.
+The preflight requires these retained outputs and verifies their PASS status,
+artifact hashes, counts, fixed masks across stages, frozen selector settings,
+and shuffled/opposite-label donor controls:
 
-If Cell 1 previously reached only the final CelebA preparation stage, pull the
-latest branch and use `--celeba yes prepare-celeba` to rerun that stage alone.
+- `/kaggle/working/phase9_selector_metadata/selector_metadata_report.json`
+- `/kaggle/working/phase9_plan.json`
+- `/kaggle/working/cub_replication_manifest.csv`
 
-## Cell 2 — run all gated LLaVA work
+Do not run Cell 2 unless the last line includes `CUB PREPARATION PASS`.
+
+## Cell 2 — run all gated CUB LLaVA work
 
 ```bash
 %%bash
+set -Eeuo pipefail
 PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
-PYTHONUNBUFFERED=1 python3 -u "$PROJECT/scripts/run_kaggle_followup.py" --notebook-safe --celeba auto llava
+PYTHONUNBUFFERED=1 python3 -u \
+  "$PROJECT/scripts/run_kaggle_followup.py" \
+  --notebook-safe --celeba no llava
 ```
 
-This runs Phase 9 smoke → pilot → full → analysis, then CUB LLaVA smoke →
-pilot → full → analysis. If CelebA was prepared, its LLaVA sequence runs here
-while the checkpoint is available. A hashed LLaVA results archive is created
-before this cell reports success. Model loading and first-time downloads can be
-quiet; the runner prints a heartbeat every minute until the active stage emits
-its own progress. Interrupting and rerunning is safe because completed records
-are written atomically and resumed.
+This runs Phase 9 LLaVA smoke → pilot → full → image-clustered analysis,
+followed by CUB four-condition LLaVA smoke → pilot → full → analysis. A full
+run cannot start without passing, policy-matched smoke and pilot reports. Model
+loading and downloads can be quiet; the runner prints a one-minute heartbeat.
+After a failure, fix the reported code or input issue and rerun this same cell;
+completed stages are reused only when their hashes and counts still match.
 
-## Cell 3 — switch to Qwen, run replications, analyze, and package
+## Cell 3 — switch to Qwen, run CUB, analyze, and package
 
 ```bash
 %%bash
+set -Eeuo pipefail
 PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
-PYTHONUNBUFFERED=1 python3 -u "$PROJECT/scripts/run_kaggle_followup.py" --notebook-safe --celeba auto qwen \
+PYTHONUNBUFFERED=1 python3 -u \
+  "$PROJECT/scripts/run_kaggle_followup.py" \
+  --notebook-safe --celeba no qwen \
   --clear-llava-checkpoint
 ```
 
-The checkpoint removal is guarded: it occurs only after the LLaVA analysis and
-hashed archive exist. This cell installs the pinned Qwen environment, runs CUB
-smoke → pilot → full, runs CelebA when present, computes cross-model intervals,
-renders figures, and creates the final archive and SHA-256 sidecar.
+LLaVA checkpoint deletion is guarded by a passing LLaVA analysis and verified
+archive hash. Qwen then runs CUB smoke → pilot → full, computes the paired
+cross-model image-clustered intervals, renders figures, and creates the final
+CUB-only archive and SHA-256 sidecar.
 
-## Cell 4 — final audit and download paths
+## Cell 4 — audit every result and print download paths
 
 ```bash
 %%bash
+set -Eeuo pipefail
 PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
-PYTHONUNBUFFERED=1 python3 -u "$PROJECT/scripts/run_kaggle_followup.py" --notebook-safe --celeba auto status
+PYTHONUNBUFFERED=1 python3 -u \
+  "$PROJECT/scripts/run_kaggle_followup.py" \
+  --notebook-safe --celeba no status
 ```
 
-Do not continue to the next cell unless the current cell ends in `PASS`. The
-notebook-safe mode prevents IPython's generic `CalledProcessError` from hiding
-the useful output. A failure ends with `COMPACT WORKFLOW FAILED`, saves
-`/kaggle/working/lger_compact_last_failure.json`, and tells you to stop.
+This audit checks all Phase 9 and CUB smoke/pilot/full reports, policy digests,
+row and decision counts, four controls per decision, recorded artifact and
+source hashes, archive hashes and members, 10,000-sample image-clustered 95%
+confidence intervals, and official-test use. Exact teacher-forced likelihood
+ties must remain incorrect abstentions.
 
-The detailed 31-cell notebook remains available for isolated debugging or
-manual storage cleanup.
+Do not continue to the next cell unless the current cell ends in `PASS`.
+Notebook-safe failures save `/kaggle/working/lger_compact_last_failure.json`
+and end with `STOP HERE`. Interpret attention/localization only as diagnostic,
+probes as evidence of accessibility, and controlled interventions as the only
+support for causal claims. Keep null or mixed intervals explicitly
+null-compatible; they do not establish absence.

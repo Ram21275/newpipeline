@@ -1,6 +1,27 @@
-# Current project handoff — 6 September 2026
+# Current project handoff — 14 September 2026
 
 Branch: `feat/iclr`. Project: `projects/logit_evidence_routing`.
+
+## Active continuation (supersedes the execution instructions below)
+
+Continue with CUB-200-2011 only. The attached CelebA package is incomplete, so
+do not search for, prepare, run, analyze, or package CelebA. Use `--celeba no`
+for every compact-runner command.
+
+Compact preparation completed the CUB work before the optional second-dataset
+failure. Retain and preflight these Kaggle outputs without rerunning extraction:
+
+- `/kaggle/working/phase9_selector_metadata/selector_metadata_report.json`
+- `/kaggle/working/phase9_plan.json`
+- `/kaggle/working/cub_replication_manifest.csv`
+
+Then use `notebooks/KAGGLE_FOLLOWUP_COMPACT.ipynb`: preflight, gated LLaVA,
+gated Qwen with guarded LLaVA checkpoint cleanup, and the final audit. The
+audit covers report/source/artifact/archive hashes, counts, four controls,
+image-clustered intervals, conservative exact-margin ties, and zero official-test
+use. Preserve the frozen Phase 8 protocol. Treat attention/localization as
+diagnostic, probes as accessibility evidence, and only controlled interventions
+as causal evidence; null or mixed intervals remain null-compatible.
 
 ## Current state (supersedes earlier smoke-only handoffs)
 

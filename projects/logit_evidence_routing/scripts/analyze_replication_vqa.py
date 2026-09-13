@@ -24,6 +24,14 @@ from lger.phase7 import clustered_paired_bootstrap  # noqa: E402
 CONTROLS = ("image", "prompt_only", "image_shuffled", "opposite_label_image")
 
 
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def read_csv(path: Path) -> list[dict[str, str]]:
     with path.open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
@@ -158,7 +166,8 @@ def main() -> None:
     labels = [item[0] for item in args.input]
     if len(labels) != len(set(labels)):
         raise RuntimeError("input labels must be unique")
-    models = {label: normalize(label, Path(path)) for label, path in args.input}
+    input_paths = {label: Path(path) for label, path in args.input}
+    models = {label: normalize(label, path) for label, path in input_paths.items()}
     summaries, contrasts = [], []
     for label, decisions in models.items():
         result = analyze_model(
@@ -217,6 +226,19 @@ def main() -> None:
         "summaries": summaries,
         "paired_contrasts": contrasts,
         "cross_model_contrasts": cross_model,
+        "source_hashes": {
+            f"input_{label}": sha256(path) for label, path in input_paths.items()
+        },
+        "artifacts": {
+            summary_path.name: sha256(summary_path),
+            contrast_path.name: sha256(contrast_path),
+        },
+        "claim_boundary": (
+            "These development-only controls test model reliance on the paired image. "
+            "Attention and localization remain diagnostic, probes establish accessibility, "
+            "and only controlled interventions support causal claims. Null-compatible or mixed "
+            "intervals do not establish absence."
+        ),
         "official_test_images_used": 0,
     }
     report_path = args.output_dir / "replication_vqa_analysis.json"

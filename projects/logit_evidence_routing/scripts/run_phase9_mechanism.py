@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -19,6 +20,14 @@ from lger.phase9 import (  # noqa: E402
     aggregate_selector_interventions,
     build_selector_intervention_plan,
 )
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def read_records(path: Path) -> list[dict[str, Any]]:
@@ -108,6 +117,7 @@ def main(argv: list[str] | None = None) -> None:
             include_low_evidence=args.include_low_evidence,
             include_global_control=not args.omit_global_control,
         )
+        payload["source_hashes"] = {"token_metadata": sha256(args.token_metadata)}
     else:
         payload = aggregate_selector_interventions(
             read_records(args.outcomes),
@@ -116,6 +126,10 @@ def main(argv: list[str] | None = None) -> None:
             seed=args.seed,
             confidence_level=args.confidence_level,
         )
+        payload["source_hashes"] = {
+            "outcomes": sha256(args.outcomes),
+            "plan": sha256(args.plan),
+        }
     atomic_write(args.output, payload)
     print(json.dumps({
         "status": "PASS",

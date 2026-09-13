@@ -1,5 +1,10 @@
 # Kaggle executable cells: full LLaVA follow-up, then Qwen2.5-VL
 
+> **Historical debugging reference only.** For the active CUB-only continuation,
+> use `KAGGLE_FOLLOWUP_COMPACT.ipynb`. Do not run the cleanup cell or the archived
+> CelebA cells in this document; preserve the retained artifacts and use
+> `--celeba no` throughout.
+
 Paste each fenced block below into **one Kaggle code cell** and run the cells in
 order. Every cell is self-contained: it defines its own paths, stops on the
 first error, and checks the report produced by the preceding scientific step.

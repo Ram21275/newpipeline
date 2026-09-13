@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Run the development-only Kaggle follow-up in four resumable stages.
+"""Run the CUB-only development follow-up in resumable Kaggle stages.
 
 This script is the compact counterpart of the detailed 31-cell runbook.  It
-keeps every smoke and pilot gate, validates every JSON report, and prints the
-exact stage and command when a subprocess fails.
+keeps every smoke and pilot gate, validates reports and artifact identities,
+and prints the exact stage and command when a subprocess fails. CelebA is
+deliberately excluded from this continuation.
 """
 
 from __future__ import annotations
@@ -12,12 +13,14 @@ import argparse
 import csv
 import hashlib
 import json
+import math
 import os
 import queue
 import shlex
 import shutil
 import subprocess
 import sys
+import tarfile
 import threading
 import time
 import traceback
@@ -31,6 +34,8 @@ REPO = PROJECT.parents[1]
 PYTHON = sys.executable
 BOOTSTRAP_ARGS = ("--bootstrap-samples", "10000", "--confidence-level", "0.95", "--seed", "20260913")
 HEARTBEAT_SECONDS = 60.0
+CUB_CONTROLS = ("image", "prompt_only", "image_shuffled", "opposite_label_image")
+TIE_POLICY = "retain exact zero margins as abstentions and score incorrect"
 
 
 class WorkflowError(RuntimeError):
@@ -80,30 +85,55 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def validate_artifact_hashes(report_path: Path, report: dict[str, Any] | None = None) -> None:
+    report = report or read_json(report_path)
+    artifacts = report.get("artifacts", {})
+    require(isinstance(artifacts, dict), f"artifact hash map is malformed: {report_path}")
+    for relative, expected in artifacts.items():
+        artifact = report_path.parent / str(relative)
+        require(artifact.is_file(), f"hashed artifact is missing: {artifact}")
+        require(sha256(artifact) == expected, f"artifact SHA-256 differs: {artifact}")
+
+
+def validate_source_hashes(report_path: Path, expected: dict[str, Path]) -> None:
+    report = read_json(report_path)
+    source_hashes = report.get("source_hashes", {})
+    require(isinstance(source_hashes, dict), f"source hash map is malformed: {report_path}")
+    for label, source in expected.items():
+        require(source.is_file(), f"analysis source is missing: {source}")
+        require(source_hashes.get(label) == sha256(source),
+                f"analysis source SHA-256 differs for {label}: {report_path}")
+
+
+def validate_intervals(report_path: Path, report: dict[str, Any], fields: Iterable[str]) -> None:
+    for field in fields:
+        rows = report.get(field, [])
+        require(isinstance(rows, list), f"{field} must be a list: {report_path}")
+        for index, row in enumerate(rows):
+            require(isinstance(row, dict), f"{field}[{index}] is malformed: {report_path}")
+            try:
+                estimate = float(row["estimate"])
+                low = float(row["ci_low"])
+                high = float(row["ci_high"])
+            except (KeyError, TypeError, ValueError) as error:
+                raise WorkflowError(f"{field}[{index}] lacks a numeric interval: {report_path}") from error
+            require(all(math.isfinite(value) for value in (estimate, low, high)),
+                    f"{field}[{index}] has a non-finite interval: {report_path}")
+            require(low <= high, f"{field}[{index}] has a reversed interval: {report_path}")
+            interpretation = row.get("interpretation")
+            if low <= 0 <= high:
+                require(interpretation == "null_compatible",
+                        f"{field}[{index}] must be null-compatible: {report_path}")
+            else:
+                require(interpretation != "null_compatible",
+                        f"{field}[{index}] incorrectly reports null compatibility: {report_path}")
+
+
 def find_cub_root(input_root: Path) -> Path | None:
     for current, _directories, files in os.walk(input_root):
         path = Path(current)
         if path.name == "CUB_200_2011" and "images.txt" in files and (path / "images").is_dir():
             return path
-    return None
-
-
-def find_celeba_root(input_root: Path) -> Path | None:
-    required_flat_annotations = {
-        "identity_CelebA.txt",
-        "list_attr_celeba.txt",
-        "list_bbox_celeba.txt",
-        "list_landmarks_celeba.txt",
-    }
-    for current, directories, files in os.walk(input_root):
-        path = Path(current)
-        if path.name == "Img" and "img_celeba" in directories:
-            candidate = path.parent
-            if (candidate / "Img" / "img_celeba").is_dir():
-                return candidate
-        if "img_celeba" in directories and required_flat_annotations <= set(files):
-            if (path / "img_celeba").is_dir():
-                return path
     return None
 
 
@@ -124,15 +154,12 @@ def resolve_localizer_cache(phase1b_root: Path) -> Path:
 
 
 class Workflow:
-    def __init__(self, working_root: Path, input_root: Path, celeba: str) -> None:
+    def __init__(self, working_root: Path, input_root: Path) -> None:
         self.working = working_root.resolve()
         self.inputs = input_root.resolve()
-        self.celeba_policy = celeba
         self.run_root = self.working / "multiphase_development_5b55fde6a51f"
         self.cub_root: Path | None = None
-        self.celeba_root: Path | None = None
         self._cub_searched = False
-        self._celeba_searched = False
 
     def p(self, name: str) -> Path:
         return self.working / name
@@ -212,22 +239,6 @@ class Workflow:
         print(f"CUB_ROOT {self.cub_root}", flush=True)
         return self.cub_root
 
-    def should_run_celeba(self) -> bool:
-        if self.celeba_policy == "no":
-            return False
-        if not self._celeba_searched:
-            print(f"Looking for optional CelebA below {self.inputs} ...", flush=True)
-            self.celeba_root = find_celeba_root(self.inputs)
-            self._celeba_searched = True
-        if self.celeba_policy == "yes":
-            require(self.celeba_root is not None, f"CelebA in-the-wild layout was not found below {self.inputs}")
-            return True
-        print(
-            f"CelebA {'found at ' + str(self.celeba_root) if self.celeba_root else 'not attached'}.",
-            flush=True,
-        )
-        return self.celeba_root is not None
-
     def inspect_storage(self) -> None:
         self.working.mkdir(parents=True, exist_ok=True)
         usage = shutil.disk_usage(self.working)
@@ -265,50 +276,201 @@ class Workflow:
         ):
             require((self.run_root / relative).is_file(), f"missing retained artifact: {relative}")
 
-    def prepare_celeba(self) -> None:
-        if not self.should_run_celeba():
-            print("CelebA: not attached; optional replication will be skipped.")
-            return
-        assert self.celeba_root is not None
-        output = self.p("celeba_replication_development")
-        self.run(
-            "prepare optional CelebA development split",
-            self.script(
-                "prepare_celeba_replication.py",
-                "--celeba-root", self.celeba_root,
-                "--config", PROJECT / "configs" / "celeba_replication.json",
-                "--output-dir", output,
-            ),
-        )
-        source = output / "celeba_development_decisions.csv"
-        rows = [row for row in read_csv(source) if row["development_split"] == "val"]
-        require(rows and all(row["official_test_image"] == "0" for row in rows),
-                "CelebA validation rows must exclude the official test split")
-        target = self.p("celeba_validation_decisions.csv")
-        temporary = target.with_suffix(".csv.tmp")
-        with temporary.open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=list(rows[0]), lineterminator="\n")
-            writer.writeheader()
-            writer.writerows(rows)
-        temporary.replace(target)
-        self.run(
-            "build CelebA opposite-label controls",
-            self.script(
-                "build_opposite_label_controls.py", "--input", target,
-                "--output", self.p("celeba_replication_manifest.csv"), "--seed", "31415",
-            ),
-        )
-        self.validate_replication_manifest(self.p("celeba_replication_manifest.csv"))
-
     @staticmethod
-    def validate_replication_manifest(path: Path) -> None:
+    def validate_replication_manifest(path: Path) -> list[dict[str, str]]:
         rows = read_csv(path)
+        required = {
+            "decision_id", "image_id", "attribute_id", "target", "prompt_text",
+            "relative_path", "shuffled_image_id", "shuffled_relative_path",
+            "opposite_label_image_id", "opposite_label_relative_path",
+            "opposite_label_target", "opposite_label_seed",
+        }
+        require(all(required <= set(row) for row in rows),
+                f"replication manifest lacks required columns: {path}")
+        require(len({row["decision_id"] for row in rows}) == len(rows),
+                f"decision IDs must be unique: {path}")
         require({int(row["target"]) for row in rows} == {0, 1}, f"both labels are required: {path}")
         require(all(int(row["opposite_label_target"]) == 1 - int(row["target"]) for row in rows),
                 f"opposite-label controls are invalid: {path}")
         require(all(row["opposite_label_image_id"] != row["image_id"] for row in rows),
                 f"opposite-label donors must use different images: {path}")
-        print(f"manifest PASS: {len(rows)} decisions, both labels, opposite-label donors verified")
+        require(all(row["opposite_label_relative_path"] != row["relative_path"] for row in rows),
+                f"opposite-label donor paths must differ: {path}")
+        require(all(row["shuffled_image_id"] != row["image_id"] for row in rows),
+                f"shuffled controls must use different images: {path}")
+        require(all(row["shuffled_relative_path"] != row["relative_path"] for row in rows),
+                f"shuffled control paths must differ: {path}")
+        require({int(row["opposite_label_seed"]) for row in rows} == {31415},
+                f"opposite-label seed differs from the frozen plan: {path}")
+        require(all(int(row.get("official_test_image", "0")) == 0 for row in rows),
+                f"replication manifest contains official-test images: {path}")
+        require(all(row.get("official_split", "train") == "train" for row in rows),
+                f"replication manifest contains a non-training official split: {path}")
+        print(
+            f"manifest PASS: {len(rows)} unique decisions, both labels, "
+            "shuffled and opposite-label donors verified"
+        )
+        return rows
+
+    def validate_cub_preparation(self) -> tuple[dict[str, Any], list[dict[str, str]]]:
+        selector_path = self.p("phase9_selector_metadata/selector_metadata_report.json")
+        selector = validate_report(
+            selector_path,
+            purpose="phase9_full_cache_only_selector_metadata",
+            development_only=True,
+            phase8_protocol_unchanged=True,
+            model_extraction_performed=False,
+            selected_stage="vision.late",
+            neighbor_stage="projector.output",
+            selector_methods=["vision_cls_attention", "logit_concept"],
+        )
+        validate_artifact_hashes(selector_path, selector)
+
+        plan_path = self.p("phase9_plan.json")
+        plan = validate_report(
+            plan_path,
+            development_only=True,
+            phase8_protocol_unchanged=True,
+            selected_stage="vision.late",
+            neighbor_stage="projector.output",
+            selector_methods=["vision_cls_attention", "logit_concept"],
+            selection_k=32,
+            matched_random_seeds=[0, 1, 2],
+            fixed_mask_across_stages=True,
+            replacement="development_train_stage_mean",
+        )
+        plan_sources = plan.get("source_hashes")
+        if plan_sources is not None:
+            require(isinstance(plan_sources, dict)
+                    and plan_sources.get("token_metadata") == sha256(
+                        self.p("phase9_selector_metadata/selector_token_metadata.csv")
+                    ), "Phase 9 plan token-metadata SHA-256 differs")
+        require(selector.get("decisions") == plan.get("decision_count"),
+                "selector export and intervention plan decision counts differ")
+        records = plan.get("records")
+        require(isinstance(records, list) and records, "Phase 9 plan records are missing")
+        require(len(records) == plan.get("intervention_count"),
+                "Phase 9 intervention count differs from its records")
+        require(len({str(row["decision_id"]) for row in records}) == plan.get("decision_count"),
+                "Phase 9 decision count differs from its records")
+        require(len({str(row["image_id"]) for row in records}) == plan.get("image_count"),
+                "Phase 9 image count differs from its records")
+        require(len({str(row["intervention_id"]) for row in records}) == len(records),
+                "Phase 9 intervention IDs are not unique")
+
+        paired_masks: dict[tuple[str, str, str, int], dict[str, tuple[int, ...]]] = {}
+        for row in records:
+            key = (
+                str(row["decision_id"]), str(row["selection_method"]),
+                str(row["intervention_type"]), int(row["replicate"]),
+            )
+            paired_masks.setdefault(key, {})[str(row["stage"])] = tuple(
+                int(index) for index in row["token_indices"]
+            )
+        expected_stages = {str(plan["selected_stage"]), str(plan["neighbor_stage"])}
+        for key, stages in paired_masks.items():
+            require(set(stages) == expected_stages, f"Phase 9 stage pair is incomplete: {key}")
+            require(len(set(stages.values())) == 1,
+                    f"Phase 9 mask changes across stages: {key}")
+
+        manifest = self.validate_replication_manifest(self.p("cub_replication_manifest.csv"))
+        print(
+            "CUB PREPARATION PASS: selector metadata, fixed Phase 9 plan, and "
+            f"four-condition manifest verified; decisions={len(manifest)}, official-test images used=0"
+        )
+        return plan, manifest
+
+    @staticmethod
+    def phase9_expected_counts(
+        plan: dict[str, Any], mode: str, pilot_decisions: int = 20
+    ) -> tuple[int, int]:
+        decision_ids = sorted({str(row["decision_id"]) for row in plan["records"]})
+        if mode == "smoke":
+            chosen = set(decision_ids[:1])
+        elif mode == "pilot":
+            chosen = set(decision_ids[:pilot_decisions])
+        else:
+            chosen = set(decision_ids)
+        interventions = sum(str(row["decision_id"]) in chosen for row in plan["records"])
+        return len(chosen), interventions
+
+    def phase9_stage_complete(self, mode: str, output: Path, plan: dict[str, Any]) -> bool:
+        report_path = output / "phase9_extraction_report.json"
+        if not report_path.is_file():
+            return False
+        report = validate_report(
+            report_path, mode=mode, development_only=True, phase8_protocol_unchanged=True
+        )
+        expected_decisions, expected_interventions = self.phase9_expected_counts(plan, mode)
+        require(report.get("decisions") == expected_decisions,
+                f"completed Phase 9 {mode} decision count differs")
+        require(report.get("interventions") == expected_interventions,
+                f"completed Phase 9 {mode} intervention count differs")
+        evaluation = read_json(output / "evaluation_config.json")
+        require(evaluation.get("mode") == mode, f"Phase 9 {mode} evaluation identity differs")
+        expected_sources = {
+            "phase5_report_sha256": self.run_root / "phase5/phase5_run_report.json",
+            "bridge_report_sha256": self.run_root / "phase7_bridge/token_metadata_report.json",
+            "plan_sha256": self.p("phase9_plan.json"),
+            "phase9_config_sha256": PROJECT / "configs/phase9_mechanism.json",
+            "means_sha256": self.run_root / "phase7_bridge/development_train_stage_means.safetensors",
+        }
+        for field, source in expected_sources.items():
+            require(source.is_file() and evaluation.get(field) == sha256(source),
+                    f"Phase 9 {mode} {field} differs")
+        outcomes = output / "intervention_outcomes.csv"
+        require(outcomes.is_file(), f"Phase 9 {mode} outcomes are missing")
+        require(report.get("outcomes_sha256") == sha256(outcomes),
+                f"Phase 9 {mode} outcome hash differs")
+        print(f"SKIP completed Phase 9 LLaVA {mode}: hashes and counts verified")
+        return True
+
+    def replication_stage_complete(
+        self, model: str, mode: str, output: Path, config: Path,
+        manifest: Path, pilot_decisions: int,
+    ) -> bool:
+        report_path = output / "replication_vqa_report.json"
+        if not report_path.is_file():
+            return False
+        report = validate_report(report_path, mode=mode)
+        expected_adapter = "llava" if model == "llava" else "qwen2_5_vl"
+        require(report.get("adapter") == expected_adapter,
+                f"completed CUB/{model}/{mode} adapter differs")
+        manifest_rows = self.validate_replication_manifest(manifest)
+        expected_decisions = 2 if mode == "smoke" else (
+            min(pilot_decisions, len(manifest_rows)) if mode == "pilot" else len(manifest_rows)
+        )
+        require(report.get("decisions") == expected_decisions,
+                f"completed CUB/{model}/{mode} decision count differs")
+        require(report.get("control_rows") == len(CUB_CONTROLS) * expected_decisions,
+                f"completed CUB/{model}/{mode} control count differs")
+        evaluation = read_json(output / "evaluation_config.json")
+        require(evaluation.get("mode") == mode, f"CUB/{model}/{mode} evaluation identity differs")
+        require(evaluation.get("config_sha256") == sha256(config),
+                f"CUB/{model}/{mode} config hash differs")
+        require(evaluation.get("manifest_sha256") == sha256(manifest),
+                f"CUB/{model}/{mode} manifest hash differs")
+        validate_artifact_hashes(report_path, report)
+        print(f"SKIP completed CUB {model.upper()} {mode}: hashes, counts, and controls verified")
+        return True
+
+    def analysis_complete(
+        self, report_path: Path, sources: dict[str, Path], *, label: str
+    ) -> bool:
+        if not report_path.is_file():
+            return False
+        report = validate_report(report_path)
+        recorded = report.get("source_hashes")
+        if not isinstance(recorded, dict):
+            print(f"REBUILD {label}: existing analysis predates source-hash auditing")
+            return False
+        expected = {name: sha256(path) for name, path in sources.items()}
+        if any(recorded.get(name) != digest for name, digest in expected.items()):
+            print(f"REBUILD {label}: source hashes changed")
+            return False
+        validate_artifact_hashes(report_path, report)
+        print(f"SKIP completed {label}: source and artifact hashes verified")
+        return True
 
     def prepare(self, *, skip_tests: bool) -> None:
         self.inspect_storage()
@@ -385,8 +547,7 @@ class Workflow:
                 "--output", self.p("cub_replication_manifest.csv"), "--seed", "31415",
             ),
         )
-        self.validate_replication_manifest(self.p("cub_replication_manifest.csv"))
-        self.prepare_celeba()
+        self.validate_cub_preparation()
         print("\nPREPARE PASS. Run compact Cell 2 (LLaVA).")
 
     def run_phase9_llava(self) -> None:
@@ -404,6 +565,8 @@ class Workflow:
             ]),
         )
         for mode, output, extra in modes:
+            if self.phase9_stage_complete(mode, output, plan):
+                continue
             self.run(
                 f"Phase 9 LLaVA {mode}",
                 self.script(
@@ -423,16 +586,21 @@ class Workflow:
                         "Phase 9 full decision count differs from the plan")
                 require(report.get("interventions") == plan.get("intervention_count"),
                         "Phase 9 full intervention count differs from the plan")
-        self.run(
-            "aggregate Phase 9 intervals",
-            self.script(
-                "run_phase9_mechanism.py", "aggregate",
-                "--outcomes", self.p("phase9_llava_full/intervention_outcomes.csv"),
-                "--plan", plan_path, "--output", self.p("phase9_llava_analysis.json"),
-                *BOOTSTRAP_ARGS,
-            ),
-        )
-        validate_report(self.p("phase9_llava_analysis.json"))
+        outcomes = self.p("phase9_llava_full/intervention_outcomes.csv")
+        analysis = self.p("phase9_llava_analysis.json")
+        if not self.analysis_complete(
+            analysis, {"outcomes": outcomes, "plan": plan_path}, label="Phase 9 analysis"
+        ):
+            self.run(
+                "aggregate Phase 9 intervals",
+                self.script(
+                    "run_phase9_mechanism.py", "aggregate",
+                    "--outcomes", outcomes,
+                    "--plan", plan_path, "--output", analysis,
+                    *BOOTSTRAP_ARGS,
+                ),
+            )
+        validate_report(analysis)
 
     def run_replication(self, model: str, dataset: str, image_root: Path,
                         manifest: Path, pilot_decisions: int) -> None:
@@ -441,6 +609,10 @@ class Workflow:
         )
         outputs = {mode: self.p(f"{dataset}_{model}_{mode}") for mode in ("smoke", "pilot", "full")}
         for mode in ("smoke", "pilot", "full"):
+            if self.replication_stage_complete(
+                model, mode, outputs[mode], config, manifest, pilot_decisions
+            ):
+                continue
             extra: list[object] = []
             if mode in ("pilot", "full"):
                 extra += ["--smoke-dir", outputs["smoke"], "--pilot-decisions", pilot_decisions]
@@ -473,12 +645,21 @@ class Workflow:
             f"{dataset}_{labels[0]}_analysis" if len(labels) == 1
             else f"{dataset}_cross_model_analysis"
         )
+        sources = {
+            f"input_{label}": self.p(f"{dataset}_{label}_full/replication_vqa_decisions.csv")
+            for label in labels
+        }
+        report_path = self.p(f"{output_name}/replication_vqa_analysis.json")
+        if self.analysis_complete(
+            report_path, sources, label=f"{dataset.upper()} {'/'.join(labels)} analysis"
+        ):
+            return
         command = self.script("analyze_replication_vqa.py")
         for label in labels:
             command += ["--input", label, self.p(f"{dataset}_{label}_full/replication_vqa_decisions.csv")]
         command += ["--output-dir", self.p(output_name), *BOOTSTRAP_ARGS]
         self.run(f"analyze {dataset.upper()} {'/'.join(labels)} replication", command)
-        validate_report(self.p(f"{output_name}/replication_vqa_analysis.json"))
+        validate_report(report_path)
 
     def create_archive(self, filename: str, members: Iterable[str]) -> Path:
         member_list = list(members)
@@ -506,10 +687,148 @@ class Workflow:
         require(fields[0] == actual, f"archive SHA-256 differs from its sidecar: {archive}")
         return actual
 
+    def audit_archive(self, filename: str, required_members: Iterable[str]) -> str:
+        actual = self.verify_archive(filename)
+        archive = self.p(filename)
+        with tarfile.open(archive, "r:gz") as handle:
+            members = {member.name.removeprefix("./") for member in handle.getmembers()}
+        require(not any("celeba" in member.lower() for member in members),
+                f"CUB-only archive contains a CelebA member: {archive}")
+        for required_member in required_members:
+            require(any(member == required_member or member.startswith(required_member + "/")
+                        for member in members),
+                    f"archive member is missing: {required_member}")
+        print(f"PASS archive SHA-256 and CUB-only members: {actual}  {archive.name}")
+        return actual
+
+    def audit_replication_stage(
+        self, model: str, mode: str, manifest: list[dict[str, str]]
+    ) -> dict[str, Any]:
+        output = self.p(f"cub_{model}_{mode}")
+        report_path = output / "replication_vqa_report.json"
+        report = validate_report(report_path, mode=mode)
+        config_path = PROJECT / "configs" / (
+            "llava_full_replication.json" if model == "llava" else "qwen25vl_7b_replication.json"
+        )
+        config = read_json(config_path)
+        expected_adapter = "llava" if model == "llava" else "qwen2_5_vl"
+        require(
+            report.get("adapter") == expected_adapter
+            and report.get("model") == config.get("model")
+            and report.get("resolved_revision") == config.get("revision"),
+            f"CUB/{model}/{mode} model identity differs from the frozen config",
+        )
+        evaluation = read_json(output / "evaluation_config.json")
+        require(
+            evaluation.get("config_sha256") == sha256(config_path)
+            and evaluation.get("manifest_sha256") == sha256(self.p("cub_replication_manifest.csv")),
+            f"CUB/{model}/{mode} input hashes differ from the frozen inputs",
+        )
+        validate_artifact_hashes(report_path, report)
+        rows = read_csv(output / "replication_vqa_decisions.csv")
+        require(len(rows) == report.get("control_rows"),
+                f"CUB/{model}/{mode} CSV and report row counts differ")
+        by_decision: dict[str, list[dict[str, str]]] = {}
+        for row in rows:
+            by_decision.setdefault(row["decision_id"], []).append(row)
+            tie = int(row["margin_tie"])
+            correct = int(row["margin_correct"])
+            margin = float(row["answer_margin"])
+            likelihoods = (
+                float(row["positive_log_likelihood"]),
+                float(row["negative_log_likelihood"]),
+                float(row["correct_answer_margin"]),
+                margin,
+            )
+            require(all(math.isfinite(value) for value in likelihoods),
+                    f"CUB/{model}/{mode} contains a non-finite likelihood or margin")
+            require(tie in (0, 1) and correct in (0, 1),
+                    f"CUB/{model}/{mode} has malformed tie/correct flags")
+            require(tie == int(margin == 0.0),
+                    f"CUB/{model}/{mode} tie flag differs from the exact margin")
+            require(not tie or (correct == 0 and row.get("margin_prediction", "") == ""),
+                    f"CUB/{model}/{mode} exact tie was not retained as an incorrect abstention")
+        require(len(by_decision) == report.get("decisions"),
+                f"CUB/{model}/{mode} CSV and report decision counts differ")
+        require(all({row["control"] for row in decision_rows} == set(CUB_CONTROLS)
+                    and len(decision_rows) == len(CUB_CONTROLS)
+                    for decision_rows in by_decision.values()),
+                f"CUB/{model}/{mode} does not contain exactly four controls per decision")
+        manifest_by_id = {row["decision_id"]: row for row in manifest}
+        for decision_id, decision_rows in by_decision.items():
+            source = manifest_by_id.get(decision_id)
+            require(source is not None,
+                    f"CUB/{model}/{mode} contains a decision outside the frozen manifest")
+            evaluated = {row["control"]: row["evaluated_image_id"] for row in decision_rows}
+            require(evaluated == {
+                "image": source["image_id"],
+                "prompt_only": "",
+                "image_shuffled": source["shuffled_image_id"],
+                "opposite_label_image": source["opposite_label_image_id"],
+            }, f"CUB/{model}/{mode}/{decision_id} control image identities differ")
+        computed_ties = {
+            control: sum(int(row["margin_tie"]) for row in rows if row["control"] == control)
+            for control in CUB_CONTROLS
+        }
+        require(report.get("margin_ties_by_control") == computed_ties,
+                f"CUB/{model}/{mode} tie counts differ from the CSV")
+        manifest_ids = {row["decision_id"] for row in manifest}
+        require(set(by_decision) <= manifest_ids,
+                f"CUB/{model}/{mode} contains decisions outside the frozen manifest")
+        computed_targets: dict[str, int] = {}
+        for decision_rows in by_decision.values():
+            target = str(int(decision_rows[0]["target"]))
+            computed_targets[target] = computed_targets.get(target, 0) + 1
+        require(report.get("target_counts") == computed_targets,
+                f"CUB/{model}/{mode} target counts differ from the CSV")
+        positive_ids = tuple(int(value) for value in report.get("positive_token_ids", []))
+        negative_ids = tuple(int(value) for value in report.get("negative_token_ids", []))
+        require(positive_ids and negative_ids and positive_ids != negative_ids,
+                f"CUB/{model}/{mode} answer token identities are missing or identical")
+        print(
+            f"PASS CUB {model.upper()} {mode}: decisions={len(by_decision)}, "
+            f"controls={len(rows)}, ties={sum(computed_ties.values())}, official-test images used=0"
+        )
+        return report
+
+    def audit_replication_analysis(
+        self, relative: str, labels: list[str], manifest_count: int
+    ) -> dict[str, Any]:
+        report_path = self.p(relative) / "replication_vqa_analysis.json"
+        report = validate_report(
+            report_path,
+            model_labels=labels,
+            bootstrap_unit="image_id",
+            bootstrap_samples=10000,
+            confidence_level=0.95,
+            tie_policy=TIE_POLICY,
+        )
+        sources = {
+            f"input_{label}": self.p(f"cub_{label}_full/replication_vqa_decisions.csv")
+            for label in labels
+        }
+        validate_source_hashes(report_path, sources)
+        validate_artifact_hashes(report_path, report)
+        summaries = report.get("summaries")
+        require(isinstance(summaries, list), f"analysis summaries are malformed: {report_path}")
+        require({(row.get("model_label"), row.get("control")) for row in summaries}
+                == {(label, control) for label in labels for control in CUB_CONTROLS},
+                f"analysis summaries do not cover every model/control: {report_path}")
+        require(all(row.get("decisions") == manifest_count for row in summaries),
+                f"analysis decision counts differ from the manifest: {report_path}")
+        validate_intervals(report_path, report, ("paired_contrasts", "cross_model_contrasts"))
+        expected_cross_model = 3 if len(labels) == 2 else 0
+        require(len(report.get("cross_model_contrasts", [])) == expected_cross_model,
+                f"cross-model contrast count differs: {report_path}")
+        print(
+            f"PASS {relative}: image-clustered 95% intervals, conservative ties, "
+            "all controls and source/artifact hashes verified"
+        )
+        return report
+
     def llava(self) -> None:
         cub = self.require_cub()
-        validate_report(self.p("phase9_selector_metadata/selector_metadata_report.json"))
-        self.validate_replication_manifest(self.p("cub_replication_manifest.csv"))
+        self.validate_cub_preparation()
         self.run_phase9_llava()
         self.run_replication("llava", "cub", cub / "images", self.p("cub_replication_manifest.csv"), 40)
         self.analyze_replication("cub", ["llava"])
@@ -520,16 +839,6 @@ class Workflow:
             "cub_llava_smoke", "cub_llava_pilot", "cub_llava_full", "cub_llava_analysis",
             "paper_figures_development",
         ]
-        if self.should_run_celeba():
-            assert self.celeba_root is not None
-            manifest = self.p("celeba_replication_manifest.csv")
-            self.validate_replication_manifest(manifest)
-            self.run_replication("llava", "celeba", self.celeba_root, manifest, 72)
-            archive_members += [
-                "celeba_replication_development", "celeba_validation_decisions.csv",
-                "celeba_replication_manifest.csv", "celeba_llava_smoke",
-                "celeba_llava_pilot", "celeba_llava_full",
-            ]
         self.create_archive("llava_phase9_and_cub_results.tar.gz", archive_members)
         print("\nLLAVA PASS. Download the LLaVA archive as a checkpoint, then run compact Cell 3 (Qwen).")
 
@@ -540,8 +849,15 @@ class Workflow:
         )
         require(self.p("llava_phase9_and_cub_results.tar.gz").is_file(),
                 "refusing to clear LLaVA before its results archive exists")
-        validate_report(self.p("cub_llava_analysis/replication_vqa_analysis.json"))
-        self.verify_archive("llava_phase9_and_cub_results.tar.gz")
+        manifest = self.validate_replication_manifest(self.p("cub_replication_manifest.csv"))
+        for mode in ("smoke", "pilot", "full"):
+            self.audit_replication_stage("llava", mode, manifest)
+        self.audit_replication_analysis("cub_llava_analysis", ["llava"], len(manifest))
+        self.audit_archive("llava_phase9_and_cub_results.tar.gz", (
+            "phase9_selector_metadata", "phase9_plan.json", "phase9_llava_full",
+            "phase9_llava_analysis.json", "cub_replication_manifest.csv", "cub_llava_full",
+            "cub_llava_analysis",
+        ))
         for path in targets:
             if path.exists():
                 print(f"removing checkpoint cache: {path}")
@@ -549,6 +865,7 @@ class Workflow:
 
     def qwen(self, *, clear_llava: bool) -> None:
         cub = self.require_cub()
+        self.validate_cub_preparation()
         if clear_llava:
             self.clear_llava_checkpoint()
         self.run(
@@ -574,60 +891,101 @@ class Workflow:
             ),
             env={"MPLCONFIGDIR": "/tmp/matplotlib"},
         )
-        optional_members: list[str] = []
-        if self.should_run_celeba():
-            assert self.celeba_root is not None
-            celeba_manifest = self.p("celeba_replication_manifest.csv")
-            self.validate_replication_manifest(celeba_manifest)
-            self.run_replication("qwen", "celeba", self.celeba_root, celeba_manifest, 72)
-            self.analyze_replication("celeba", ["llava", "qwen"])
-            self.run(
-                "plot CelebA cross-model intervals",
-                self.script(
-                    "plot_followup_results.py",
-                    "--phase9-analysis", self.p("phase9_llava_analysis.json"),
-                    "--replication-analysis", self.p("celeba_cross_model_analysis/replication_vqa_analysis.json"),
-                    "--output-dir", self.p("celeba_followup_figures"),
-                ),
-                env={"MPLCONFIGDIR": "/tmp/matplotlib"},
-            )
-            optional_members = [
-                "celeba_replication_development", "celeba_validation_decisions.csv",
-                "celeba_replication_manifest.csv", "celeba_llava_smoke", "celeba_llava_pilot",
-                "celeba_llava_full", "celeba_qwen_smoke", "celeba_qwen_pilot", "celeba_qwen_full",
-                "celeba_cross_model_analysis", "celeba_followup_figures",
-            ]
-            self.create_archive("celeba_cross_model_development_results.tar.gz", optional_members)
         core_members = [
             "phase9_selector_metadata", "phase9_plan.json", "phase9_llava_smoke",
             "phase9_llava_pilot", "phase9_llava_full", "phase9_llava_analysis.json",
             "cub_replication_manifest.csv", "cub_llava_smoke", "cub_llava_pilot",
             "cub_llava_full", "cub_llava_analysis", "cub_qwen_smoke", "cub_qwen_pilot",
             "cub_qwen_full", "cub_cross_model_analysis", "paper_figures_development",
-            "followup_paper_figures", *optional_members,
+            "followup_paper_figures",
         ]
         self.create_archive("logit_evidence_followup_complete.tar.gz", core_members)
         print("\nQWEN PASS. Run compact Cell 4 for the final audit and download paths.")
 
     def status(self) -> None:
-        checks = (
-            ("selector metadata", self.p("phase9_selector_metadata/selector_metadata_report.json")),
-            ("Phase 9 smoke", self.p("phase9_llava_smoke/phase9_extraction_report.json")),
-            ("Phase 9 pilot", self.p("phase9_llava_pilot/phase9_extraction_report.json")),
-            ("Phase 9 full", self.p("phase9_llava_full/phase9_extraction_report.json")),
-            ("Phase 9 analysis", self.p("phase9_llava_analysis.json")),
-            ("CUB LLaVA full", self.p("cub_llava_full/replication_vqa_report.json")),
-            ("CUB Qwen full", self.p("cub_qwen_full/replication_vqa_report.json")),
-            ("CUB cross-model analysis", self.p("cub_cross_model_analysis/replication_vqa_analysis.json")),
+        plan, manifest = self.validate_cub_preparation()
+
+        phase9_reports = {
+            mode: validate_report(
+                self.p(f"phase9_llava_{mode}/phase9_extraction_report.json"),
+                mode=mode, development_only=True, phase8_protocol_unchanged=True,
+            )
+            for mode in ("smoke", "pilot", "full")
+        }
+        for mode, report in phase9_reports.items():
+            expected_decisions, expected_interventions = self.phase9_expected_counts(plan, mode)
+            require(report.get("decisions") == expected_decisions,
+                    f"Phase 9 {mode} decision count differs")
+            require(report.get("interventions") == expected_interventions,
+                    f"Phase 9 {mode} intervention count differs")
+            outcomes = self.p(f"phase9_llava_{mode}/intervention_outcomes.csv")
+            require(outcomes.is_file(), f"Phase 9 {mode} outcomes are missing")
+            require(report.get("outcomes_sha256") == sha256(outcomes),
+                    f"Phase 9 {mode} outcome SHA-256 differs")
+            print(
+                f"PASS Phase 9 {mode}: decisions={expected_decisions}, "
+                f"interventions={expected_interventions}, outcome hash verified"
+            )
+        require(len({report["policy_digest"] for report in phase9_reports.values()}) == 1,
+                "Phase 9 smoke/pilot/full policy digests differ")
+
+        phase9_analysis_path = self.p("phase9_llava_analysis.json")
+        phase9_analysis = validate_report(
+            phase9_analysis_path,
+            development_only=True,
+            phase8_protocol_unchanged=True,
+            bootstrap_unit="image_id",
+            bootstrap_samples=10000,
+            confidence_level=0.95,
         )
-        for label, path in checks:
-            report = validate_report(path)
-            details = [f"{key}={report[key]}" for key in ("mode", "decisions", "interventions", "control_rows") if key in report]
-            print(f"PASS {label}: {', '.join(details) if details else path.name}")
+        validate_source_hashes(phase9_analysis_path, {
+            "outcomes": self.p("phase9_llava_full/intervention_outcomes.csv"),
+            "plan": self.p("phase9_plan.json"),
+        })
+        require(phase9_analysis.get("decision_count") == plan.get("decision_count"),
+                "Phase 9 analysis decision count differs from the plan")
+        require(phase9_analysis.get("outcome_count") == plan.get("intervention_count"),
+                "Phase 9 analysis outcome count differs from the plan")
+        validate_intervals(phase9_analysis_path, phase9_analysis, (
+            "selector_specific_contrasts", "stage_interactions", "selector_interactions",
+            "failure_success_interactions", "global_manipulation_checks",
+        ))
+        print(
+            "PASS Phase 9 analysis: image-clustered 95% intervals, source hashes, "
+            "frozen protocol, and outcome counts verified"
+        )
+
+        stage_reports: dict[tuple[str, str], dict[str, Any]] = {}
+        for model in ("llava", "qwen"):
+            for mode in ("smoke", "pilot", "full"):
+                stage_reports[(model, mode)] = self.audit_replication_stage(model, mode, manifest)
+            require(len({stage_reports[(model, mode)]["policy_digest"]
+                         for mode in ("smoke", "pilot", "full")}) == 1,
+                    f"CUB {model} smoke/pilot/full policy digests differ")
+
+        self.audit_replication_analysis("cub_llava_analysis", ["llava"], len(manifest))
+        self.audit_replication_analysis(
+            "cub_cross_model_analysis", ["llava", "qwen"], len(manifest)
+        )
+        self.audit_archive("llava_phase9_and_cub_results.tar.gz", (
+            "phase9_selector_metadata", "phase9_plan.json", "phase9_llava_full",
+            "phase9_llava_analysis.json", "cub_replication_manifest.csv", "cub_llava_full",
+            "cub_llava_analysis",
+        ))
+        self.audit_archive("logit_evidence_followup_complete.tar.gz", (
+            "phase9_selector_metadata", "phase9_plan.json", "phase9_llava_full",
+            "phase9_llava_analysis.json", "cub_replication_manifest.csv", "cub_llava_full",
+            "cub_qwen_full", "cub_cross_model_analysis", "followup_paper_figures",
+        ))
+
         archive = self.p("logit_evidence_followup_complete.tar.gz")
         checksum = self.p("logit_evidence_followup_complete.sha256")
-        actual = self.verify_archive(archive.name)
-        print(f"PASS archive SHA-256: {actual}")
+        print("AUDIT PASS: CUB-only outputs are internally consistent; official-test image use=0")
+        print(
+            "CLAIM BOUNDARY: attention/localization is diagnostic, probes establish accessibility, "
+            "and only controlled interventions support causal claims. Null or mixed intervals remain "
+            "null-compatible and do not establish absence."
+        )
         print(f"DOWNLOAD {archive}")
         print(f"DOWNLOAD {checksum}")
 
@@ -636,8 +994,10 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("--working-root", type=Path, default=Path("/kaggle/working"))
     result.add_argument("--input-root", type=Path, default=Path("/kaggle/input"))
-    result.add_argument("--celeba", choices=("auto", "yes", "no"), default="auto",
-                        help="auto runs CelebA only when its in-the-wild layout is attached")
+    result.add_argument(
+        "--celeba", choices=("no",), default="no",
+        help="compatibility flag; this continuation is CUB-only and requires 'no'",
+    )
     result.add_argument(
         "--notebook-safe", action="store_true",
         help="print and save failures without replacing useful output with an IPython wrapper",
@@ -645,10 +1005,7 @@ def parser() -> argparse.ArgumentParser:
     commands = result.add_subparsers(dest="command", required=True)
     prepare = commands.add_parser("prepare", help="install, test, validate caches, and build plans")
     prepare.add_argument("--skip-tests", action="store_true")
-    commands.add_parser(
-        "prepare-celeba",
-        help="prepare only the optional CelebA manifests after a late prepare-stage failure",
-    )
+    commands.add_parser("preflight", help="verify retained CUB preparation artifacts without a model")
     commands.add_parser("llava", help="run gated Phase 9 and LLaVA replications")
     qwen = commands.add_parser("qwen", help="run gated Qwen replications and package outputs")
     qwen.add_argument("--clear-llava-checkpoint", action="store_true")
@@ -658,11 +1015,11 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> None:
     args = parser().parse_args(argv)
-    workflow = Workflow(args.working_root, args.input_root, args.celeba)
+    workflow = Workflow(args.working_root, args.input_root)
     if args.command == "prepare":
         workflow.prepare(skip_tests=args.skip_tests)
-    elif args.command == "prepare-celeba":
-        workflow.prepare_celeba()
+    elif args.command == "preflight":
+        workflow.validate_cub_preparation()
     elif args.command == "llava":
         workflow.llava()
     elif args.command == "qwen":
