@@ -58,6 +58,22 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     temporary.replace(path)
 
 
+def resolve_localizer_cache(path: Path) -> Path:
+    """Accept either the Phase 1b cache itself or its corrected-run parent."""
+    candidates = (path, path / "cache")
+    for candidate in candidates:
+        if (
+            (candidate / "extraction_config.json").is_file()
+            and (candidate / "records").is_dir()
+        ):
+            return candidate
+    expected = " or ".join(str(candidate) for candidate in candidates)
+    raise RuntimeError(
+        "corrected Phase 1b localizer cache is incomplete; expected "
+        f"extraction_config.json and records/ under {expected}"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stage-cache", type=Path, required=True)
@@ -66,10 +82,11 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
 
+    localizer_cache = resolve_localizer_cache(args.localizer_cache)
     run_config_path = args.stage_cache / "run_config.json"
     index_path = args.stage_cache / "index.json"
     validation_path = args.stage_cache / "validation_report.json"
-    localizer_config_path = args.localizer_cache / "extraction_config.json"
+    localizer_config_path = localizer_cache / "extraction_config.json"
     phase6_report_path = args.phase6_dir / "phase6_run_report.json"
     transition_path = args.phase6_dir / "transition_decision.json"
     joint_path = args.phase6_dir / "joint_decisions.csv"
@@ -143,7 +160,7 @@ def main() -> None:
                 inside = patch_centers_in_box(grid, image_size, box)
                 require(norms.shape == inside.shape, "stage tokens do not align with spatial grid")
 
-                localizer_path = args.localizer_cache / "records" / f"{image_id:05d}.pt"
+                localizer_path = localizer_cache / "records" / f"{image_id:05d}.pt"
                 require(localizer_path.is_file(), f"localizer cache is missing image {image_id}")
                 localizer = torch.load(localizer_path, map_location="cpu", weights_only=False)
                 require(int(localizer["image_id"]) == image_id, "localizer image identity differs")

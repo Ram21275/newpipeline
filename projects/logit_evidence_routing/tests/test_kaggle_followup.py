@@ -19,8 +19,25 @@ COMPACT = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(COMPACT)
 
+EXPORT_SPEC = importlib.util.spec_from_file_location(
+    "export_phase9_full_selector_metadata",
+    PROJECT / "scripts" / "export_phase9_full_selector_metadata.py",
+)
+EXPORTER = importlib.util.module_from_spec(EXPORT_SPEC)
+assert EXPORT_SPEC.loader is not None
+EXPORT_SPEC.loader.exec_module(EXPORTER)
+
 
 class CompactWorkflowTests(unittest.TestCase):
+    def test_resolves_nested_corrected_phase1b_cache(self):
+        with tempfile.TemporaryDirectory() as directory:
+            corrected = Path(directory) / "phase1b_corrected"
+            cache = corrected / "cache"
+            (cache / "records").mkdir(parents=True)
+            (cache / "extraction_config.json").write_text("{}\n", encoding="utf-8")
+            self.assertEqual(COMPACT.resolve_localizer_cache(corrected), cache)
+            self.assertEqual(EXPORTER.resolve_localizer_cache(corrected), cache)
+
     def test_finds_cub_and_celeba_layouts(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -48,7 +48,8 @@ Phase 4 bundle.
 set -euo pipefail
 KEEP=/kaggle/working/multiphase_development_5b55fde6a51f
 test -f "$KEEP/phase8_frozen_protocol.json"
-test -f /kaggle/working/phase1b_corrected/extraction_config.json
+test -f /kaggle/working/phase1b_corrected/cache/extraction_config.json
+test -d /kaggle/working/phase1b_corrected/cache/records
 test -f /kaggle/working/phase2_stage_cache/validation_report.json
 test -d /kaggle/working/newpipeline/.git
 rm -rf -- \
@@ -166,7 +167,7 @@ PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
 RUN=/kaggle/working/multiphase_development_5b55fde6a51f
 python3 "$PROJECT/scripts/export_phase9_full_selector_metadata.py" \
   --stage-cache /kaggle/working/phase2_stage_cache \
-  --localizer-cache /kaggle/working/phase1b_corrected \
+  --localizer-cache /kaggle/working/phase1b_corrected/cache \
   --phase6-dir "$RUN/phase6" \
   --output-dir /kaggle/working/phase9_selector_metadata
 python3 - <<'PY'

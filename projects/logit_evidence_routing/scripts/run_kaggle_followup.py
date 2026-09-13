@@ -94,6 +94,22 @@ def find_celeba_root(input_root: Path) -> Path | None:
     return None
 
 
+def resolve_localizer_cache(phase1b_root: Path) -> Path:
+    """Resolve the corrected Phase 1b cache without rerunning extraction."""
+    candidates = (phase1b_root / "cache", phase1b_root)
+    for candidate in candidates:
+        if (
+            (candidate / "extraction_config.json").is_file()
+            and (candidate / "records").is_dir()
+        ):
+            return candidate
+    expected = " or ".join(str(candidate) for candidate in candidates)
+    raise WorkflowError(
+        "missing corrected Phase 1b localizer cache; expected "
+        f"extraction_config.json and records/ under {expected}"
+    )
+
+
 class Workflow:
     def __init__(self, working_root: Path, input_root: Path, celeba: str) -> None:
         self.working = working_root.resolve()
@@ -237,6 +253,8 @@ class Workflow:
     def prepare(self, *, skip_tests: bool) -> None:
         self.inspect_storage()
         self.require_cub()
+        localizer_cache = resolve_localizer_cache(self.p("phase1b_corrected"))
+        print(f"Phase 1b localizer cache: {localizer_cache}")
         required_scripts = (
             "export_phase9_full_selector_metadata.py",
             "extract_phase9_llava_interventions.py",
@@ -274,7 +292,7 @@ class Workflow:
             self.script(
                 "export_phase9_full_selector_metadata.py",
                 "--stage-cache", self.p("phase2_stage_cache"),
-                "--localizer-cache", self.p("phase1b_corrected"),
+                "--localizer-cache", localizer_cache,
                 "--phase6-dir", self.run_root / "phase6",
                 "--output-dir", self.p("phase9_selector_metadata"),
             ),
