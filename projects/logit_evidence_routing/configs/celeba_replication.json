@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "purpose": "celeba_development_dataset_replication",
+  "status": "DEVELOPMENT_PROTOCOL",
+  "dataset": "CelebA_in_the_wild",
+  "image_subdirectory": "Img/img_celeba",
+  "license": "noncommercial_research_only",
+  "use_official_partitions": true,
+  "max_images_per_identity": 1,
+  "require_identity_disjoint_splits": true,
+  "sampling_seed": 260913,
+  "development_train_images": 800,
+  "development_validation_images": 400,
+  "planned_untouched_test_images": 400,
+  "official_test_images_used": 0,
+  "selected_attributes": [
+    {
+      "name": "Eyeglasses",
+      "phrase": "eyeglasses",
+      "relevant_landmarks": ["lefteye", "righteye"]
+    },
+    {
+      "name": "Bushy_Eyebrows",
+      "phrase": "bushy eyebrows",
+      "relevant_landmarks": ["lefteye", "righteye"]
+    },
+    {
+      "name": "Mouth_Slightly_Open",
+      "phrase": "a slightly open mouth",
+      "relevant_landmarks": ["leftmouth", "rightmouth"]
+    },
+    {
+      "name": "Smiling",
+      "phrase": "a smile",
+      "relevant_landmarks": ["leftmouth", "rightmouth"]
+    },
+    {
+      "name": "Mustache",
+      "phrase": "a mustache",
+      "relevant_landmarks": ["nose", "leftmouth", "rightmouth"]
+    },
+    {
+      "name": "Goatee",
+      "phrase": "a goatee",
+      "relevant_landmarks": ["leftmouth", "rightmouth"]
+    }
+  ],
+  "excluded_attribute_types": [
+    "subjective_judgments",
+    "demographic_or_identity_labels",
+    "attributes_without_a_supported_landmark_proxy"
+  ],
+  "prompt_template": "Does the face have {attribute_phrase}? Answer only yes or no.",
+  "controls": [
+    "image",
+    "prompt_only",
+    "image_shuffled",
+    "opposite_label_image"
+  ],
+  "run_order": ["smoke", "pilot", "full"],
+  "pilot_decisions": 72,
+  "models": [
+    "llava-hf/llava-1.5-7b-hf",
+    "Qwen/Qwen2.5-VL-7B-Instruct"
+  ],
+  "claim_boundary": "A second dataset tests generality. Landmark proxies are diagnostics and CelebA attribute noise limits fine-grained localization claims."
+}

@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "purpose": "llava_full_binary_vqa_replication_with_opposite_label_control",
+  "adapter": "llava",
+  "model": "llava-hf/llava-1.5-7b-hf",
+  "revision": "b234b804b114d9e37bb655e11cbbb5f5e971b7a9",
+  "quantization": "4bit",
+  "positive_answer": "yes",
+  "negative_answer": "no",
+  "primary_metric": "teacher_forced_sequence_log_likelihood_margin",
+  "controls": [
+    "image",
+    "prompt_only",
+    "image_shuffled",
+    "opposite_label_image"
+  ],
+  "question_conditioned_llm_attention": true,
+  "attention_layer_offset": -2,
+  "max_new_tokens": 3,
+  "run_order": [
+    "smoke",
+    "pilot",
+    "full"
+  ],
+  "pilot_decisions": 40,
+  "official_test_images_used": 0
+}

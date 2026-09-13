@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "purpose": "phase9_development_only_mechanism_disambiguation",
+  "phase8_protocol_unchanged": true,
+  "may_change_phase8_confirmatory_claim": false,
+  "official_test_images_used": 0,
+  "cohort": "reuse_phase7_matched_development_cohort",
+  "score_origin_stage": "vision.late",
+  "intervention_stages": [
+    "vision.late",
+    "projector.output"
+  ],
+  "fixed_mask_across_stages": true,
+  "selector_methods": [
+    "vision_cls_attention",
+    "logit_concept"
+  ],
+  "existing_probe_intervention": "reuse_phase7_result_without_reextraction",
+  "selection_k": 32,
+  "replacement": "development_train_stage_mean",
+  "intervention_types": [
+    "top_evidence",
+    "matched_random",
+    "global_all"
+  ],
+  "matched_random_seeds": [
+    0,
+    1,
+    2
+  ],
+  "matching_strata": [
+    "bird_box_membership",
+    "hidden_state_norm_quartile"
+  ],
+  "matching_fallback": "global_per_selector_norm_quantiles_4_then_2_then_1_with_exact_bird_box_stratum",
+  "primary_outcome": "correct_answer_teacher_forced_margin_drop",
+  "primary_contrast": "top_evidence_drop_minus_matched_random_drop",
+  "diagnostic_interactions": [
+    "vision_late_minus_projector_output_selector_specific_effect",
+    "selector_pair_difference_in_selector_specific_effect",
+    "phase5_failure_minus_success_selector_specific_effect"
+  ],
+  "global_all_role": "intervention_path_manipulation_check_only",
+  "bootstrap_unit": "image_id",
+  "bootstrap_replicates": 10000,
+  "confidence_level": 0.95,
+  "null_policy": "retain_as_null_compatible_and_do_not_infer_absence"
+}

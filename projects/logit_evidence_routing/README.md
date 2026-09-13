@@ -392,3 +392,30 @@ count in its report, and reuses all representation caches. Rerun both Phase 4
 notebook cells from the latest commit. If the full report sets
 `phase3_revalidation_required=true`, rerun the Phase 3 probes with the corrected
 consumer-side label policy before making cross-phase claims.
+
+## Post-freeze development follow-up
+
+Phase 8 is frozen and remains unchanged. The development-only follow-up in
+[`planning/10_MECHANISM_DISAMBIGUATION.md`](planning/10_MECHANISM_DISAMBIGUATION.md)
+directly compares the Vision-CLS and Logit-Lens selectors that triggered the
+Phase 6 gate. It applies one fixed top-patch mask at both `vision.late` and
+`projector.output`, adds a matched-random control and an all-patch manipulation
+check, and reports selector, stage, and Phase 5 failure/success interactions.
+
+The execution order is:
+
+1. `export_phase9_full_selector_metadata.py` reads the retained Phase 1/2 caches.
+2. `run_phase9_mechanism.py plan` creates the deterministic intervention plan.
+3. `extract_phase9_llava_interventions.py` runs smoke, pilot, then full modes.
+4. `run_phase9_mechanism.py aggregate` analyzes the full outcomes.
+
+The cross-model utilization replication adds an opposite-label donor control.
+Run `extract_replication_vqa.py` with
+`configs/llava_full_replication.json` first and
+`configs/qwen25vl_7b_replication.json` second. Qwen uses a separate pinned
+Transformers environment in `requirements-qwen-kaggle.txt`. The CelebA
+development manifest builder is `prepare_celeba_replication.py`; it uses one
+image per identity, objective landmark-proxy attributes, and no official-test
+images. These replications strengthen model or dataset generality only when
+reported with their full null/mixed outcomes; they do not revise the original
+Phase 8 claim.

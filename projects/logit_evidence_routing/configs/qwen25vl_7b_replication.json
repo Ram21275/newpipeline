@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "purpose": "cross_model_binary_vqa_replication",
+  "adapter": "qwen2_5_vl",
+  "model": "Qwen/Qwen2.5-VL-7B-Instruct",
+  "revision": "cc594898137f460bfe9f0759e9844b3ce807cfb5",
+  "checkpoint_size_bytes_reported": 16600000000,
+  "transformers_version": "4.51.3",
+  "quantization": "4bit",
+  "positive_answer": "yes",
+  "negative_answer": "no",
+  "primary_metric": "teacher_forced_sequence_log_likelihood_margin",
+  "controls": [
+    "image",
+    "prompt_only",
+    "image_shuffled",
+    "opposite_label_image"
+  ],
+  "attention_layer_offset": -2,
+  "max_new_tokens": 3,
+  "run_order": [
+    "smoke",
+    "pilot",
+    "full"
+  ],
+  "pilot_decisions": 40,
+  "official_test_images_used": 0,
+  "claim_boundary": "Cross-model replication strengthens generality; it does not replace a causal intervention or prove a unique loss layer."
+}
