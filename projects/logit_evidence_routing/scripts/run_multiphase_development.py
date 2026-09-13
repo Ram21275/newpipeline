@@ -45,6 +45,36 @@ def run(args: list[str], *, log_path: Path | None = None) -> None:
             raise subprocess.CalledProcessError(returncode, args)
 
 
+def completed_step(
+    label: str,
+    report_path: Path,
+    required_artifacts: tuple[Path, ...],
+) -> bool:
+    """Recognize a completed development step without trusting partial output."""
+
+    if not report_path.is_file():
+        return False
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    if report.get("status") != "PASS":
+        return False
+    if report.get("official_test_images_used", 0) != 0:
+        raise RuntimeError(f"{label} report records official-test access: {report_path}")
+    missing = [path for path in required_artifacts if not path.is_file()]
+    if missing:
+        print(
+            f"RESUME: {label} has a PASS report but is missing "
+            + ", ".join(str(path) for path in missing)
+            + "; recomputing.",
+            flush=True,
+        )
+        return False
+    print(f"RESUME: reusing completed {label} from {report_path.parent}", flush=True)
+    return True
+
+
 def main() -> None:
     started = time.monotonic()
     parser = argparse.ArgumentParser(description=__doc__)
@@ -81,43 +111,80 @@ def main() -> None:
     env = dict(os.environ, PYTHONPATH="src", PYTHONUNBUFFERED="1")
 
     # Track A is CPU by default and starts first.  Track B owns the GPU, so the
-    # two long computations overlap without loading two 7B checkpoints.
+    # two long computations overlap without loading two 7B checkpoints.  A
+    # PASS report plus every required artifact is the resumability checkpoint.
     phase3_log = output / "logs" / "phase3r.log"
     phase3_log.parent.mkdir(parents=True, exist_ok=True)
-    phase3_handle = phase3_log.open("a", encoding="utf-8")
-    phase3_args = command(
-        "run_phase3_attribute_probes.py",
-        "--cache-dir", args.stage_cache,
-        "--output-dir", paths["p3"],
-        "--device", args.phase3_device,
-        "--epochs", args.phase3_epochs,
+    phase3_required = (
+        paths["p3"] / "evaluation_config.json",
+        paths["p3"] / "per_attribute_metrics.csv",
+        paths["p3"] / "attribute_probe_by_stage.csv",
+        paths["p3"] / "decision_probe_scores.csv",
+        paths["p3"] / "probe_parameters.json",
+        paths["p3"] / "probe_parameters.safetensors",
     )
-    print("$", " ".join(phase3_args), "(background)", flush=True)
-    phase3 = subprocess.Popen(
-        phase3_args,
-        cwd=PROJECT,
-        env=env,
-        stdout=phase3_handle,
-        stderr=subprocess.STDOUT,
+    phase3_complete = completed_step(
+        "Phase 3R", paths["p3"] / "phase3_run_report.json", phase3_required
     )
+    phase3_handle = None
+    phase3 = None
+    if not phase3_complete:
+        phase3_handle = phase3_log.open("a", encoding="utf-8")
+        phase3_args = command(
+            "run_phase3_attribute_probes.py",
+            "--cache-dir", args.stage_cache,
+            "--output-dir", paths["p3"],
+            "--device", args.phase3_device,
+            "--epochs", args.phase3_epochs,
+        )
+        print("$", " ".join(phase3_args), "(background)", flush=True)
+        phase3 = subprocess.Popen(
+            phase3_args,
+            cwd=PROJECT,
+            env=env,
+            stdout=phase3_handle,
+            stderr=subprocess.STDOUT,
+        )
     try:
         common_phase5 = [
             "--stage-cache", args.stage_cache,
             "--phase4-dir", args.phase4_dir,
             "--cub-root", args.cub_root,
         ]
-        run(command(
-            "extract_phase5_vqa.py", "--mode", "smoke", *common_phase5,
-            "--output-dir", paths["p5smoke"],
-        ), log_path=output / "logs" / "phase5_smoke.log")
-        run(command(
-            "extract_phase5_vqa.py", "--mode", "development", *common_phase5,
-            "--smoke-dir", paths["p5smoke"], "--output-dir", paths["p5"],
-        ), log_path=output / "logs" / "phase5.log")
-        phase3_returncode = phase3.wait()
+        phase5_required = (
+            paths["p5"] / "evaluation_config.json",
+            paths["p5"] / "decision_manifest.csv",
+            paths["p5"] / "phase5_decisions.csv",
+        )
+        phase5_complete = completed_step(
+            "Phase 5 development extraction",
+            paths["p5"] / "phase5_run_report.json",
+            phase5_required,
+        )
+        if not phase5_complete:
+            smoke_required = (
+                paths["p5smoke"] / "evaluation_config.json",
+                paths["p5smoke"] / "decision_manifest.csv",
+                paths["p5smoke"] / "phase5_decisions.csv",
+            )
+            if not completed_step(
+                "Phase 5 smoke extraction",
+                paths["p5smoke"] / "phase5_run_report.json",
+                smoke_required,
+            ):
+                run(command(
+                    "extract_phase5_vqa.py", "--mode", "smoke", *common_phase5,
+                    "--output-dir", paths["p5smoke"],
+                ), log_path=output / "logs" / "phase5_smoke.log")
+            run(command(
+                "extract_phase5_vqa.py", "--mode", "development", *common_phase5,
+                "--smoke-dir", paths["p5smoke"], "--output-dir", paths["p5"],
+            ), log_path=output / "logs" / "phase5.log")
+        phase3_returncode = phase3.wait() if phase3 is not None else 0
     finally:
-        phase3_handle.close()
-        if phase3.poll() is None:
+        if phase3_handle is not None:
+            phase3_handle.close()
+        if phase3 is not None and phase3.poll() is None:
             phase3.terminate()
             phase3.wait()
     if phase3_returncode:
@@ -131,31 +198,60 @@ def main() -> None:
     ]
     if args.part_vocabulary is not None:
         patch_args.extend(("--part-vocabulary", args.part_vocabulary))
-    run(command("export_phase3_patch_evidence.py", *patch_args))
-    run(command(
-        "run_phase5_utilization.py",
-        "--records", paths["p5"] / "phase5_decisions.csv",
-        "--output-dir", paths["p5analysis"],
-    ))
-    run(command(
-        "run_phase6_joint_analysis.py",
-        "--phase3-csv", paths["p3"] / "decision_probe_scores.csv",
-        "--phase3-patch-csv", paths["p3patch"] / "probe_patch_evidence.csv",
-        "--phase4-csv", args.phase4_dir / "attribute_metrics.csv",
-        "--phase5-csv", paths["p5analysis"] / "decision_metrics.csv",
-        "--output-dir", paths["p6"],
-    ))
+    if not completed_step(
+        "Phase 3R patch evidence",
+        paths["p3patch"] / "probe_patch_evidence_report.json",
+        (paths["p3patch"] / "probe_patch_evidence.csv",),
+    ):
+        run(command("export_phase3_patch_evidence.py", *patch_args))
+    if not completed_step(
+        "Phase 5 utilization analysis",
+        paths["p5analysis"] / "phase5_run_report.json",
+        (
+            paths["p5analysis"] / "phase5_gate.json",
+            paths["p5analysis"] / "decision_metrics.csv",
+            paths["p5analysis"] / "utilization_summary.csv",
+            paths["p5analysis"] / "paired_control_deltas.csv",
+        ),
+    ):
+        run(command(
+            "run_phase5_utilization.py",
+            "--records", paths["p5"] / "phase5_decisions.csv",
+            "--output-dir", paths["p5analysis"],
+        ))
+    if not completed_step(
+        "Phase 6 joint analysis",
+        paths["p6"] / "phase6_run_report.json",
+        (
+            paths["p6"] / "joint_decisions.csv",
+            paths["p6"] / "inference_summary.csv",
+            paths["p6"] / "transition_decision.json",
+        ),
+    ):
+        run(command(
+            "run_phase6_joint_analysis.py",
+            "--phase3-csv", paths["p3"] / "decision_probe_scores.csv",
+            "--phase3-patch-csv", paths["p3patch"] / "probe_patch_evidence.csv",
+            "--phase4-csv", args.phase4_dir / "attribute_metrics.csv",
+            "--phase5-csv", paths["p5analysis"] / "decision_metrics.csv",
+            "--output-dir", paths["p6"],
+        ))
     transition = json.loads((paths["p6"] / "transition_decision.json").read_text())
     if transition["selected_transition"] == "mixed_or_null":
-        run(command(
-            "build_paper_results_package.py",
-            "--phase3-dir", paths["p3"],
-            "--phase4-dir", args.phase4_dir,
-            "--phase4-review", PROJECT / "reports/development_20260911/phase4_review_decision.json",
-            "--phase5-analysis-dir", paths["p5analysis"],
-            "--phase6-dir", paths["p6"],
-            "--output-dir", paths["paper"],
-        ))
+        if not completed_step(
+            "paper results package",
+            paths["paper"] / "paper_package_manifest.json",
+            (paths["paper"] / "PAPER_FINDINGS.md",),
+        ):
+            run(command(
+                "build_paper_results_package.py",
+                "--phase3-dir", paths["p3"],
+                "--phase4-dir", args.phase4_dir,
+                "--phase4-review", PROJECT / "reports/development_20260911/phase4_review_decision.json",
+                "--phase5-analysis-dir", paths["p5analysis"],
+                "--phase6-dir", paths["p6"],
+                "--output-dir", paths["paper"],
+            ))
         status = {
             "schema_version": 1,
             "status": "PASS_PHASE7_BLOCKED_BY_PREDECLARED_GATE",
@@ -172,14 +268,23 @@ def main() -> None:
         print(json.dumps(status, indent=2), flush=True)
         return
 
-    run(command(
-        "export_phase7_token_metadata.py",
-        "--stage-cache", args.stage_cache,
-        "--phase3-dir", paths["p3"],
-        "--phase6-dir", paths["p6"],
-        "--output-dir", paths["p7bridge"],
-        "--max-per-outcome-per-attribute", args.phase7_max_per_outcome_per_attribute,
-    ))
+    if not completed_step(
+        "Phase 7 token-metadata bridge",
+        paths["p7bridge"] / "token_metadata_report.json",
+        (
+            paths["p7bridge"] / "token_metadata.csv",
+            paths["p7bridge"] / "causal_cohort.csv",
+            paths["p7bridge"] / "development_train_stage_means.safetensors",
+        ),
+    ):
+        run(command(
+            "export_phase7_token_metadata.py",
+            "--stage-cache", args.stage_cache,
+            "--phase3-dir", paths["p3"],
+            "--phase6-dir", paths["p6"],
+            "--output-dir", paths["p7bridge"],
+            "--max-per-outcome-per-attribute", args.phase7_max_per_outcome_per_attribute,
+        ))
     bridge = json.loads((paths["p7bridge"] / "token_metadata_report.json").read_text())
     run(command(
         "run_phase7_interventions.py", "plan",
@@ -196,14 +301,25 @@ def main() -> None:
         "--plan", paths["p7plan"],
         "--cub-root", args.cub_root,
     ]
-    run(command(
-        "extract_phase7_interventions.py", "--mode", "smoke", *common_phase7,
-        "--output-dir", paths["p7smoke"],
-    ), log_path=output / "logs" / "phase7_smoke.log")
-    run(command(
-        "extract_phase7_interventions.py", "--mode", "development", *common_phase7,
-        "--smoke-dir", paths["p7smoke"], "--output-dir", paths["p7"],
-    ), log_path=output / "logs" / "phase7.log")
+    phase7_complete = completed_step(
+        "Phase 7 development interventions",
+        paths["p7"] / "phase7_extraction_report.json",
+        (paths["p7"] / "intervention_outcomes.csv",),
+    )
+    if not phase7_complete:
+        if not completed_step(
+            "Phase 7 smoke interventions",
+            paths["p7smoke"] / "phase7_extraction_report.json",
+            (paths["p7smoke"] / "intervention_outcomes.csv",),
+        ):
+            run(command(
+                "extract_phase7_interventions.py", "--mode", "smoke", *common_phase7,
+                "--output-dir", paths["p7smoke"],
+            ), log_path=output / "logs" / "phase7_smoke.log")
+        run(command(
+            "extract_phase7_interventions.py", "--mode", "development", *common_phase7,
+            "--smoke-dir", paths["p7smoke"], "--output-dir", paths["p7"],
+        ), log_path=output / "logs" / "phase7.log")
     run(command(
         "run_phase7_interventions.py", "aggregate",
         "--outcomes", paths["p7"] / "intervention_outcomes.csv",

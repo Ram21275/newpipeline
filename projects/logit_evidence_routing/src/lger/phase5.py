@@ -24,6 +24,7 @@ SUMMARY_FIELDS = (
     "mean_answer_margin",
     "mean_signed_answer_margin",
     "margin_accuracy",
+    "margin_tie_rate",
     "generation_accuracy",
     "parse_rate",
 )
@@ -306,6 +307,7 @@ def validate_phase5_records(
     for row in normalized:
         candidate_lengths[f"positive_{len(json.loads(row['positive_token_ids']))}"] += 1
         candidate_lengths[f"negative_{len(json.loads(row['negative_token_ids']))}"] += 1
+    margin_ties = sum(bool(row["margin_tie"]) for row in normalized)
     cohort_counts = Counter(row["cohort"] for row in decision_rows)
     report: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -319,6 +321,8 @@ def validate_phase5_records(
         "controls": list(CONTROLS),
         "cohort_decisions": dict(sorted(cohort_counts.items())),
         "candidate_length_rows": dict(sorted(candidate_lengths.items())),
+        "teacher_forced_margin_ties": margin_ties,
+        "teacher_forced_margin_tie_policy": "abstain_and_score_incorrect",
         "summary_rows": len(summaries),
         "paired_delta_rows": len(deltas),
         "approved_certainty_names": sorted(APPROVED_CERTAINTY_NAMES),
@@ -461,8 +465,8 @@ def _normalize_measurement(source: Mapping[str, Any], cfg: Mapping[str, Any]) ->
     generated = row.get("generated_text")
     require(isinstance(generated, str), f"generated text is missing for {expected_id}")
     parsed = strict_parse_binary(generated, positive_answer, negative_answer)
-    margin_prediction = margin > 0.0 if margin != 0.0 else None
-    require(margin_prediction is not None, f"teacher-forced margin ties for {expected_id}")
+    margin_tie = margin == 0.0
+    margin_prediction = None if margin_tie else margin > 0.0
     signed = margin if target else -margin
     return {
         "schema_version": SCHEMA_VERSION,
@@ -489,8 +493,11 @@ def _normalize_measurement(source: Mapping[str, Any], cfg: Mapping[str, Any]) ->
         "negative_log_likelihood": negative_ll,
         "answer_margin": margin,
         "signed_answer_margin": signed,
+        "margin_tie": margin_tie,
         "margin_prediction": margin_prediction,
-        "margin_correct": margin_prediction == target,
+        # A tied primary score contains no directional evidence.  Retain the
+        # measurement as an abstention and score it conservatively as wrong.
+        "margin_correct": False if margin_tie else margin_prediction == target,
         "generated_text": generated,
         "parsed_answer": parsed,
         "generation_correct": parsed == target if parsed is not None else False,
@@ -575,6 +582,7 @@ def _summary_row(
         "mean_answer_margin": statistics.mean(float(row["answer_margin"]) for row in rows),
         "mean_signed_answer_margin": statistics.mean(float(row["signed_answer_margin"]) for row in rows),
         "margin_accuracy": statistics.mean(float(bool(row["margin_correct"])) for row in rows),
+        "margin_tie_rate": statistics.mean(float(bool(row["margin_tie"])) for row in rows),
         "generation_accuracy": statistics.mean(float(bool(row["generation_correct"])) for row in rows),
         "parse_rate": statistics.mean(float(bool(row["parse_success"])) for row in rows),
     }

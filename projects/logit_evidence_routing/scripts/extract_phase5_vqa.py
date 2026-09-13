@@ -167,7 +167,8 @@ def output_row(
     output: object,
 ) -> dict[str, object]:
     target = int(decision["target"])
-    prediction = int(output.answer_margin >= 0)
+    margin_tie = output.answer_margin == 0.0
+    prediction: int | str = "" if margin_tie else int(output.answer_margin > 0.0)
     parsed = strict_binary_parse(output.generated_text)
     return {
         "schema_version": 1,
@@ -197,8 +198,9 @@ def output_row(
         "negative_log_likelihood": output.negative_log_likelihood,
         "answer_margin": output.answer_margin,
         "correct_answer_margin": output.answer_margin if target else -output.answer_margin,
+        "margin_tie": int(margin_tie),
         "margin_prediction": prediction,
-        "margin_correct": int(prediction == target),
+        "margin_correct": int(not margin_tie and prediction == target),
         "generated_text": output.generated_text or "",
         "parsed_answer": parsed or "",
         "generation_parseable": int(parsed is not None) if control == "image" else "",

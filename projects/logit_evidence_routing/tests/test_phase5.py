@@ -190,6 +190,36 @@ class Phase5ValidationTests(unittest.TestCase):
         self.assertFalse(changed["generation_correct"])
         self.assertEqual(report["status"], "PASS")
 
+    def test_teacher_forced_tie_is_retained_as_incorrect_abstention(self) -> None:
+        rows = measurements()
+        tied = rows[0]
+        tied["positive_token_logprobs"] = [-0.5]
+        tied["negative_token_logprobs"] = [-0.5]
+        tied["positive_token_ids"] = [101]
+        tied["answer_margin"] = 0.0
+        metrics, summaries, _, report = validate_phase5_records(rows, config())
+        changed = next(
+            row for row in metrics
+            if row["decision_id"] == tied["decision_id"]
+            and row["control"] == tied["control"]
+        )
+        self.assertTrue(changed["margin_tie"])
+        self.assertIsNone(changed["margin_prediction"])
+        self.assertFalse(changed["margin_correct"])
+        self.assertEqual(report["teacher_forced_margin_ties"], 1)
+        tied_summary = next(
+            row for row in summaries
+            if row["scope"] == "attribute"
+            and row["cohort"] == tied["cohort"]
+            and row["control"] == tied["control"]
+            and row["attribute_id"] == tied["attribute_id"]
+        )
+        self.assertEqual(tied_summary["margin_tie_rate"], 1.0)
+        self.assertEqual(
+            report["teacher_forced_margin_tie_policy"],
+            "abstain_and_score_incorrect",
+        )
+
     def test_gate_rejects_missing_control_and_non_derangement(self) -> None:
         rows = measurements()
         with self.assertRaisesRegex(Phase5ValidationError, "every control"):
