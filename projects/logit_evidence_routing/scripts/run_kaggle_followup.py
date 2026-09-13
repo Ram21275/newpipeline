@@ -13,10 +13,13 @@ import csv
 import hashlib
 import json
 import os
+import queue
 import shlex
 import shutil
 import subprocess
 import sys
+import threading
+import time
 import traceback
 from collections import deque
 from pathlib import Path
@@ -27,6 +30,7 @@ PROJECT = Path(__file__).resolve().parents[1]
 REPO = PROJECT.parents[1]
 PYTHON = sys.executable
 BOOTSTRAP_ARGS = ("--bootstrap-samples", "10000", "--confidence-level", "0.95", "--seed", "20260913")
+HEARTBEAT_SECONDS = 60.0
 
 
 class WorkflowError(RuntimeError):
@@ -116,8 +120,10 @@ class Workflow:
         self.inputs = input_root.resolve()
         self.celeba_policy = celeba
         self.run_root = self.working / "multiphase_development_5b55fde6a51f"
-        self.cub_root = find_cub_root(self.inputs)
-        self.celeba_root = find_celeba_root(self.inputs)
+        self.cub_root: Path | None = None
+        self.celeba_root: Path | None = None
+        self._cub_searched = False
+        self._celeba_searched = False
 
     def p(self, name: str) -> Path:
         return self.working / name
@@ -131,6 +137,7 @@ class Workflow:
         print(f"\n===== {stage} =====", flush=True)
         print(shlex.join(command), flush=True)
         process_env = os.environ.copy()
+        process_env.setdefault("PYTHONUNBUFFERED", "1")
         if env:
             process_env.update(env)
         process = subprocess.Popen(
@@ -140,9 +147,35 @@ class Workflow:
         )
         output_tail: deque[str] = deque(maxlen=200)
         assert process.stdout is not None
-        for line in process.stdout:
+        output_queue: queue.Queue[str | None] = queue.Queue()
+
+        def relay_output() -> None:
+            assert process.stdout is not None
+            try:
+                for line in process.stdout:
+                    output_queue.put(line)
+            finally:
+                output_queue.put(None)
+
+        reader = threading.Thread(target=relay_output, daemon=True)
+        reader.start()
+        started = time.monotonic()
+        while True:
+            try:
+                line = output_queue.get(timeout=HEARTBEAT_SECONDS)
+            except queue.Empty:
+                elapsed_minutes = (time.monotonic() - started) / 60.0
+                print(
+                    f"[workflow heartbeat] {stage} is still running; "
+                    f"elapsed={elapsed_minutes:.1f} min",
+                    flush=True,
+                )
+                continue
+            if line is None:
+                break
             print(line, end="", flush=True)
             output_tail.append(line)
+        reader.join()
         process.stdout.close()
         return_code = process.wait()
         if return_code != 0:
@@ -157,15 +190,28 @@ class Workflow:
             raise error
 
     def require_cub(self) -> Path:
+        if not self._cub_searched:
+            print(f"Locating CUB_200_2011 below {self.inputs} ...", flush=True)
+            self.cub_root = find_cub_root(self.inputs)
+            self._cub_searched = True
         require(self.cub_root is not None, f"CUB_200_2011 was not found below {self.inputs}")
+        print(f"CUB_ROOT {self.cub_root}", flush=True)
         return self.cub_root
 
     def should_run_celeba(self) -> bool:
         if self.celeba_policy == "no":
             return False
+        if not self._celeba_searched:
+            print(f"Looking for optional CelebA below {self.inputs} ...", flush=True)
+            self.celeba_root = find_celeba_root(self.inputs)
+            self._celeba_searched = True
         if self.celeba_policy == "yes":
             require(self.celeba_root is not None, f"CelebA in-the-wild layout was not found below {self.inputs}")
             return True
+        print(
+            f"CelebA {'found at ' + str(self.celeba_root) if self.celeba_root else 'not attached'}.",
+            flush=True,
+        )
         return self.celeba_root is not None
 
     def inspect_storage(self) -> None:

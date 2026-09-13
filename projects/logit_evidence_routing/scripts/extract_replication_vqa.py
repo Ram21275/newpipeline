@@ -225,12 +225,19 @@ def main() -> None:
     record_dir = args.output_dir / "records"
     record_dir.mkdir(exist_ok=True)
     (args.output_dir / "replication_vqa_report.json").unlink(missing_ok=True)
+    print(
+        f"Loading {config['model']} for {args.mode} replication "
+        f"({len(decisions)} decisions); the first load may download model files.",
+        flush=True,
+    )
     runner = runner_from_config(config)
     if runner.resolved_revision != config["revision"]:
         raise RuntimeError("resolved model revision differs from the frozen config")
+    print(f"Model loaded at revision {runner.resolved_revision}.", flush=True)
 
     output: list[dict[str, Any]] = []
     start = time.monotonic()
+    progress_interval = 1 if args.mode == "smoke" else 10
     for position, decision in enumerate(decisions, 1):
         destination = record_dir / (hashlib.sha256(
             str(decision["decision_id"]).encode()).hexdigest()[:20] + ".json")
@@ -239,6 +246,12 @@ def main() -> None:
             if saved["protocol_digest"] != protocol_digest:
                 raise RuntimeError("replication resume identity differs")
             output.extend(saved["rows"])
+            if position % progress_interval == 0 or position == len(decisions):
+                print(
+                    f"[{position}/{len(decisions)}] resumed "
+                    f"elapsed={time.monotonic() - start:.1f}s",
+                    flush=True,
+                )
             continue
         try:
             images = {}
@@ -285,7 +298,7 @@ def main() -> None:
                 "official_test_images_used": 0,
             }, args.output_dir / "replication_vqa_failure_report.json")
             raise
-        if position % 10 == 0 or position == len(decisions):
+        if position % progress_interval == 0 or position == len(decisions):
             print(f"[{position}/{len(decisions)}] elapsed={time.monotonic() - start:.1f}s", flush=True)
 
     if len(output) != len(decisions) * len(CONTROLS):

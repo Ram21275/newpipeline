@@ -18,7 +18,7 @@ git -C "$REPO" checkout feat/iclr || { echo "GIT CHECKOUT FAILED"; exit 0; }
 git -C "$REPO" pull --ff-only origin feat/iclr || { echo "GIT PULL FAILED"; exit 0; }
 PROJECT="$REPO/projects/logit_evidence_routing"
 cd "$PROJECT"
-python3 scripts/run_kaggle_followup.py --notebook-safe --celeba auto prepare
+PYTHONUNBUFFERED=1 python3 -u scripts/run_kaggle_followup.py --notebook-safe --celeba auto prepare
 ```
 
 This cell prints storage availability, installs from the correct project
@@ -32,20 +32,23 @@ this exact commit, add `--skip-tests` after `prepare`.
 ```bash
 %%bash
 PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
-python3 "$PROJECT/scripts/run_kaggle_followup.py" --notebook-safe --celeba auto llava
+PYTHONUNBUFFERED=1 python3 -u "$PROJECT/scripts/run_kaggle_followup.py" --notebook-safe --celeba auto llava
 ```
 
 This runs Phase 9 smoke → pilot → full → analysis, then CUB LLaVA smoke →
 pilot → full → analysis. If CelebA was prepared, its LLaVA sequence runs here
 while the checkpoint is available. A hashed LLaVA results archive is created
-before this cell reports success.
+before this cell reports success. Model loading and first-time downloads can be
+quiet; the runner prints a heartbeat every minute until the active stage emits
+its own progress. Interrupting and rerunning is safe because completed records
+are written atomically and resumed.
 
 ## Cell 3 — switch to Qwen, run replications, analyze, and package
 
 ```bash
 %%bash
 PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
-python3 "$PROJECT/scripts/run_kaggle_followup.py" --notebook-safe --celeba auto qwen \
+PYTHONUNBUFFERED=1 python3 -u "$PROJECT/scripts/run_kaggle_followup.py" --notebook-safe --celeba auto qwen \
   --clear-llava-checkpoint
 ```
 
@@ -59,7 +62,7 @@ renders figures, and creates the final archive and SHA-256 sidecar.
 ```bash
 %%bash
 PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
-python3 "$PROJECT/scripts/run_kaggle_followup.py" --notebook-safe --celeba auto status
+PYTHONUNBUFFERED=1 python3 -u "$PROJECT/scripts/run_kaggle_followup.py" --notebook-safe --celeba auto status
 ```
 
 Do not continue to the next cell unless the current cell ends in `PASS`. The

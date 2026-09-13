@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 import subprocess
 import sys
@@ -100,6 +102,22 @@ class CompactWorkflowTests(unittest.TestCase):
                 ])
             self.assertEqual(raised.exception.stage, "synthetic failure")
             self.assertIn("specific child error", raised.exception.output_tail)
+
+    def test_silent_subprocess_emits_workflow_heartbeat(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workflow = COMPACT.Workflow(root / "working", root / "input", "no")
+            previous = COMPACT.HEARTBEAT_SECONDS
+            COMPACT.HEARTBEAT_SECONDS = 0.01
+            try:
+                captured = io.StringIO()
+                with contextlib.redirect_stdout(captured):
+                    workflow.run("silent stage", [
+                        sys.executable, "-c", "import time; time.sleep(0.08)",
+                    ])
+            finally:
+                COMPACT.HEARTBEAT_SECONDS = previous
+            self.assertIn("[workflow heartbeat] silent stage is still running", captured.getvalue())
 
     def test_archive_hash_is_verified_before_checkpoint_cleanup(self):
         with tempfile.TemporaryDirectory() as directory:

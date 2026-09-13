@@ -172,6 +172,11 @@ def main() -> None:
     record_dir = args.output_dir / "records"
     record_dir.mkdir(exist_ok=True)
 
+    print(
+        f"Loading pinned LLaVA checkpoint for Phase 9 {args.mode} "
+        f"({len(records)} interventions); the first load may download model files.",
+        flush=True,
+    )
     runner = HfLlavaDecisionRunner.from_pretrained(
         str(model_config["model"]),
         revision=str(model_config["revision"]),
@@ -181,16 +186,24 @@ def main() -> None:
         attention_layer_offset=int(model_config["attention_layer_offset"]),
     )
     require(runner.resolved_revision == model_config["revision"], "resolved model revision differs")
+    print(f"LLaVA loaded at revision {runner.resolved_revision}.", flush=True)
 
     baselines: dict[str, object] = {}
     output_rows: list[dict[str, object]] = []
     start = time.monotonic()
+    progress_interval = 1 if args.mode == "smoke" else 10 if args.mode == "pilot" else 25
     for position, record in enumerate(records, 1):
         destination = record_dir / f"{record['intervention_id']}.json"
         if destination.is_file():
             saved = read_json(destination)
             require(saved["protocol_digest"] == protocol_digest, "resume identity differs")
             output_rows.append(saved["row"])
+            if position % progress_interval == 0 or position == len(records):
+                print(
+                    f"[{position}/{len(records)}] resumed "
+                    f"elapsed={time.monotonic() - start:.1f}s",
+                    flush=True,
+                )
             continue
         try:
             decision_id = str(record["decision_id"])
@@ -262,7 +275,7 @@ def main() -> None:
                 "official_test_images_used": 0,
             }, args.output_dir / "phase9_failure_report.json")
             raise
-        if position % 25 == 0 or position == len(records):
+        if position % progress_interval == 0 or position == len(records):
             print(f"[{position}/{len(records)}] elapsed={time.monotonic() - start:.1f}s", flush=True)
 
     require(len(output_rows) == len(records), "Phase 9 outcomes are incomplete")
