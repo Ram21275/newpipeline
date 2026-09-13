@@ -472,6 +472,32 @@ class Workflow:
         print(f"SKIP completed {label}: source and artifact hashes verified")
         return True
 
+    def install_llava_runtime(self) -> None:
+        """Install and exercise the pinned 4-bit runtime in this Kaggle session."""
+
+        self.run(
+            "install pinned LLaVA dependencies",
+            [PYTHON, "-m", "pip", "install", "-r", str(PROJECT / "requirements-kaggle.txt")],
+            cwd=PROJECT,
+        )
+        self.run(
+            "verify pinned LLaVA bitsandbytes runtime",
+            [
+                PYTHON,
+                "-c",
+                (
+                    "from importlib.metadata import version; "
+                    "expected={'accelerate':'1.2.1','bitsandbytes':'0.50.2','transformers':'4.49.0'}; "
+                    "actual={name:version(name) for name in expected}; "
+                    "assert actual == expected, (actual, expected); "
+                    "from lger.hf_llava import validate_bitsandbytes_4bit_runtime; "
+                    "validated=validate_bitsandbytes_4bit_runtime(); "
+                    "print('LLaVA runtime PASS', actual, 'NF4', validated)"
+                ),
+            ],
+            cwd=PROJECT,
+        )
+
     def prepare(self, *, skip_tests: bool) -> None:
         self.inspect_storage()
         self.require_cub()
@@ -486,11 +512,7 @@ class Workflow:
         )
         for name in required_scripts:
             require((PROJECT / "scripts" / name).is_file(), f"repository lacks entry point: {name}")
-        self.run(
-            "install LLaVA/test dependencies",
-            [PYTHON, "-m", "pip", "install", "-r", str(PROJECT / "requirements-kaggle.txt")],
-            cwd=PROJECT,
-        )
+        self.install_llava_runtime()
         if not skip_tests:
             self.run(
                 "CPU test suite",
@@ -829,6 +851,7 @@ class Workflow:
     def llava(self) -> None:
         cub = self.require_cub()
         self.validate_cub_preparation()
+        self.install_llava_runtime()
         self.run_phase9_llava()
         self.run_replication("llava", "cub", cub / "images", self.p("cub_replication_manifest.csv"), 40)
         self.analyze_replication("cub", ["llava"])
@@ -874,8 +897,21 @@ class Workflow:
             cwd=PROJECT,
         )
         self.run(
-            "verify pinned Transformers version",
-            [PYTHON, "-c", "import transformers; assert transformers.__version__ == '4.51.3', transformers.__version__; print('transformers', transformers.__version__)"],
+            "verify pinned Qwen bitsandbytes runtime",
+            [
+                PYTHON,
+                "-c",
+                (
+                    "from importlib.metadata import version; "
+                    "expected={'accelerate':'1.2.1','bitsandbytes':'0.50.2','transformers':'4.51.3'}; "
+                    "actual={name:version(name) for name in expected}; "
+                    "assert actual == expected, (actual, expected); "
+                    "from lger.hf_llava import validate_bitsandbytes_4bit_runtime; "
+                    "validated=validate_bitsandbytes_4bit_runtime(); "
+                    "print('Qwen runtime PASS', actual, 'NF4', validated)"
+                ),
+            ],
+            cwd=PROJECT,
         )
         manifest = self.p("cub_replication_manifest.csv")
         self.validate_replication_manifest(manifest)

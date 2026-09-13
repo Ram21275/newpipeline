@@ -50,6 +50,9 @@ This runs Phase 9 LLaVA smoke → pilot → full → image-clustered analysis,
 followed by CUB four-condition LLaVA smoke → pilot → full → analysis. A full
 run cannot start without passing, policy-matched smoke and pilot reports. Model
 loading and downloads can be quiet; the runner prints a one-minute heartbeat.
+At the start of every Kaggle session, this cell installs the exact pinned LLaVA,
+Accelerate, and bitsandbytes versions and exercises a tiny NF4 quantize/dequantize
+operation before accepting any retained stage or loading the model.
 After a failure, fix the reported code or input issue and rerun this same cell;
 completed stages are reused only when their hashes and counts still match.
 

@@ -12,6 +12,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -32,6 +33,52 @@ EXPORT_SPEC.loader.exec_module(EXPORTER)
 
 
 class CompactWorkflowTests(unittest.TestCase):
+    def test_llava_runtime_install_is_pinned_and_exercises_nf4(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workflow = COMPACT.Workflow(root / "working", root / "input")
+            with patch.object(workflow, "run") as run:
+                workflow.install_llava_runtime()
+
+            self.assertEqual(run.call_count, 2)
+            install = run.call_args_list[0]
+            self.assertEqual(install.args[0], "install pinned LLaVA dependencies")
+            self.assertEqual(install.args[1][:4], [COMPACT.PYTHON, "-m", "pip", "install"])
+            self.assertTrue(install.args[1][-1].endswith("requirements-kaggle.txt"))
+            verify = run.call_args_list[1]
+            self.assertEqual(verify.args[0], "verify pinned LLaVA bitsandbytes runtime")
+            verifier = verify.args[1][-1]
+            self.assertIn("'bitsandbytes':'0.50.2'", verifier)
+            self.assertIn("'transformers':'4.49.0'", verifier)
+            self.assertIn("validate_bitsandbytes_4bit_runtime", verifier)
+
+    def test_llava_checks_session_runtime_before_any_model_stage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workflow = COMPACT.Workflow(root / "working", root / "input")
+            cub = root / "input" / "CUB_200_2011"
+            order = []
+            with (
+                patch.object(workflow, "require_cub", return_value=cub),
+                patch.object(workflow, "validate_cub_preparation"),
+                patch.object(
+                    workflow,
+                    "install_llava_runtime",
+                    side_effect=lambda: order.append("runtime"),
+                ),
+                patch.object(
+                    workflow,
+                    "run_phase9_llava",
+                    side_effect=lambda: order.append("phase9"),
+                ),
+                patch.object(workflow, "run_replication"),
+                patch.object(workflow, "analyze_replication"),
+                patch.object(workflow, "create_archive"),
+            ):
+                workflow.llava()
+
+            self.assertEqual(order, ["runtime", "phase9"])
+
     def test_resolves_nested_corrected_phase1b_cache(self):
         with tempfile.TemporaryDirectory() as directory:
             corrected = Path(directory) / "phase1b_corrected"

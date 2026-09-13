@@ -90,6 +90,16 @@ class FakeProcessor:
 
 
 class HfLlavaHelperTests(unittest.TestCase):
+    def test_bitsandbytes_preflight_preserves_import_failure_detail(self) -> None:
+        with (
+            patch.dict(sys.modules, {"bitsandbytes": None}),
+            self.assertRaisesRegex(
+                RuntimeError,
+                "Import failed with ModuleNotFoundError",
+            ),
+        ):
+            validate_bitsandbytes_4bit_runtime()
+
     def test_bitsandbytes_preflight_exercises_nf4_kernel(self) -> None:
         functional = SimpleNamespace(
             quantize_4bit=lambda values, quant_type: (values, object()),

@@ -161,7 +161,7 @@ def validate_bitsandbytes_4bit_runtime() -> str:
         raise RuntimeError(
             "4-bit loading requires a working bitsandbytes installation. "
             f"Install the Kaggle requirements (bitsandbytes=={KAGGLE_BITSANDBYTES_VERSION}) "
-            "and retry."
+            f"and retry. Import failed with {type(error).__name__}: {error}"
         ) from error
 
     installed_version = str(getattr(bnb, "__version__", "unknown"))

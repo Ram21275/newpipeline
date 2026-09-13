@@ -17,6 +17,8 @@ failure. Retain and preflight these Kaggle outputs without rerunning extraction:
 
 Then use `notebooks/KAGGLE_FOLLOWUP_COMPACT.ipynb`: preflight, gated LLaVA,
 gated Qwen with guarded LLaVA checkpoint cleanup, and the final audit. The
+LLaVA and Qwen cells install their pinned session dependencies and exercise a
+tiny bitsandbytes NF4 operation before any model stage. The
 audit covers report/source/artifact/archive hashes, counts, four controls,
 image-clustered intervals, conservative exact-margin ties, and zero official-test
 use. Preserve the frozen Phase 8 protocol. Treat attention/localization as
