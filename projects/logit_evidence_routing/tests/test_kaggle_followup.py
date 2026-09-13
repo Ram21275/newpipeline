@@ -51,6 +51,20 @@ class CompactWorkflowTests(unittest.TestCase):
             self.assertEqual(COMPACT.find_cub_root(root), cub)
             self.assertEqual(COMPACT.find_celeba_root(root), celeba)
 
+    def test_finds_flat_kaggle_celeba_layout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            celeba = root / "celeba-non-aligned"
+            (celeba / "img_celeba").mkdir(parents=True)
+            for name in (
+                "identity_CelebA.txt",
+                "list_attr_celeba.txt",
+                "list_bbox_celeba.txt",
+                "list_landmarks_celeba.txt",
+            ):
+                (celeba / name).write_text("", encoding="utf-8")
+            self.assertEqual(COMPACT.find_celeba_root(root), celeba)
+
     def test_report_gate_requires_pass_and_zero_official_test_use(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "report.json"

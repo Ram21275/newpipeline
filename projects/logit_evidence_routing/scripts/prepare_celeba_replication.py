@@ -16,6 +16,10 @@ from typing import Any
 PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT / "src"))
 
+CELEBA_IMAGE_COUNT = 202_599
+CELEBA_TRAIN_END = 162_770
+CELEBA_VALID_END = 182_637
+
 from lger.stage_cache import atomic_json_write, config_digest  # noqa: E402
 
 
@@ -32,6 +36,53 @@ def first_existing(root: Path, relative_paths: list[str]) -> Path:
         if path.is_file():
             return path
     raise RuntimeError(f"CelebA file is missing; tried: {relative_paths}")
+
+
+def first_existing_or_none(root: Path, relative_paths: list[str]) -> Path | None:
+    for relative in relative_paths:
+        path = root / relative
+        if path.is_file():
+            return path
+    return None
+
+
+def resolve_image_subdirectory(root: Path, configured: str) -> str:
+    candidates = (configured.strip("/"), "img_celeba")
+    for relative in candidates:
+        if (root / relative).is_dir():
+            return relative
+    raise RuntimeError(
+        "CelebA in-the-wild image directory is missing; do not substitute aligned crops "
+        "because the configured boxes and landmarks use original-image coordinates"
+    )
+
+
+def official_partition_for_filename(filename: str) -> int:
+    stem, suffix = Path(filename).stem, Path(filename).suffix.lower()
+    if suffix != ".jpg" or len(stem) != 6 or not stem.isdigit():
+        raise RuntimeError(f"unexpected CelebA image filename: {filename}")
+    image_number = int(stem)
+    if not 1 <= image_number <= CELEBA_IMAGE_COUNT:
+        raise RuntimeError(f"CelebA image number is outside the official range: {filename}")
+    if image_number <= CELEBA_TRAIN_END:
+        return 0
+    if image_number <= CELEBA_VALID_END:
+        return 1
+    return 2
+
+
+def official_partition_from_image_directory(image_directory: Path) -> dict[str, int]:
+    """Reconstruct CelebA's published contiguous official filename partitions."""
+    image_names = [path.name for path in image_directory.iterdir() if path.is_file()]
+    if len(image_names) != CELEBA_IMAGE_COUNT:
+        raise RuntimeError(
+            "CelebA package lacks list_eval_partition.txt and does not contain exactly "
+            f"{CELEBA_IMAGE_COUNT} in-the-wild images"
+        )
+    partition = {name: official_partition_for_filename(name) for name in image_names}
+    if len(partition) != CELEBA_IMAGE_COUNT:
+        raise RuntimeError("CelebA in-the-wild image filenames are not unique")
+    return partition
 
 
 def simple_map(path: Path) -> dict[str, int]:
@@ -140,13 +191,11 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     config = read_config(args.config)
-    image_subdirectory = str(config["image_subdirectory"]).strip("/")
-    if not (args.celeba_root / image_subdirectory).is_dir():
-        raise RuntimeError(
-            "CelebA in-the-wild image directory is missing; do not substitute aligned crops "
-            "because the configured boxes and landmarks use original-image coordinates"
-        )
-    partition_path = first_existing(args.celeba_root, [
+    image_subdirectory = resolve_image_subdirectory(
+        args.celeba_root, str(config["image_subdirectory"])
+    )
+    image_directory = args.celeba_root / image_subdirectory
+    partition_path = first_existing_or_none(args.celeba_root, [
         "Eval/list_eval_partition.txt", "list_eval_partition.txt"
     ])
     identity_path = first_existing(args.celeba_root, [
@@ -161,7 +210,12 @@ def main() -> None:
     bbox_path = first_existing(args.celeba_root, [
         "Anno/list_bbox_celeba.txt", "list_bbox_celeba.txt"
     ])
-    partition = simple_map(partition_path)
+    if partition_path is None:
+        partition = official_partition_from_image_directory(image_directory)
+        partition_source = "published_official_filename_ranges"
+    else:
+        partition = simple_map(partition_path)
+        partition_source = str(partition_path.relative_to(args.celeba_root))
     identity = simple_map(identity_path)
     # Official test rows are excluded before attribute or landmark values are parsed.
     development_files = {name for name, value in partition.items() if value in (0, 1)}
@@ -256,6 +310,8 @@ def main() -> None:
         "selected_attributes": selected,
         "identity_disjoint": True,
         "max_images_per_identity": 1,
+        "image_subdirectory": image_subdirectory,
+        "official_partition_source": partition_source,
         "official_test_images_used": 0,
         "artifacts": {
             image_path.name: sha256(image_path),

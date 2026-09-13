@@ -89,12 +89,21 @@ def find_cub_root(input_root: Path) -> Path | None:
 
 
 def find_celeba_root(input_root: Path) -> Path | None:
-    for current, directories, _files in os.walk(input_root):
+    required_flat_annotations = {
+        "identity_CelebA.txt",
+        "list_attr_celeba.txt",
+        "list_bbox_celeba.txt",
+        "list_landmarks_celeba.txt",
+    }
+    for current, directories, files in os.walk(input_root):
         path = Path(current)
         if path.name == "Img" and "img_celeba" in directories:
             candidate = path.parent
             if (candidate / "Img" / "img_celeba").is_dir():
                 return candidate
+        if "img_celeba" in directories and required_flat_annotations <= set(files):
+            if (path / "img_celeba").is_dir():
+                return path
     return None
 
 
