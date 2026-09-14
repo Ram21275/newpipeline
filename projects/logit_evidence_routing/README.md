@@ -422,6 +422,27 @@ continuation is CUB-200-2011 only and requires `--celeba no` for every command.
 These replications strengthen model generality only when reported with their
 full null/mixed outcomes; they do not revise the original Phase 8 claim.
 
+## Verified CUB-only follow-up results (14 September 2026)
+
+The Phase 9 LLaVA mechanism run and CUB LLaVA/Qwen four-control replication are
+complete. The internal scientific audit passes: 417 Phase 9 decisions and 7,506
+interventions, 834 balanced replication decisions per model, four controls per
+decision, 10,000-sample image-clustered intervals, conservative exact-margin
+ties, matching source/artifact hashes, and zero official-test image use.
+
+Vision-CLS-selected patches have positive top-minus-matched-random effects at
+both `vision.late` and `projector.output`; Logit-Concept-selected patches are
+null-compatible at both. Correct images outperform prompt-only, shuffled, and
+opposite-label controls in both LLaVA and Qwen on teacher-forced margin and
+margin accuracy. These are CUB development findings, not official-test or
+CelebA results. Read the complete audited estimates and claim boundaries in
+[`reports/development_20260914/CUB_FOLLOWUP_REVIEW.md`](reports/development_20260914/CUB_FOLLOWUP_REVIEW.md).
+
+Only the extracted final bundle and its sidecar were available for local
+review, so the internal contents are verified but the absent outer `.tar.gz`
+could not be hashed independently. Re-download that archive to close the final
+packaging check.
+
 The recommended Kaggle sequence is the importable four-cell
 [`KAGGLE_FOLLOWUP_COMPACT.ipynb`](notebooks/KAGGLE_FOLLOWUP_COMPACT.ipynb),
 also available as a short

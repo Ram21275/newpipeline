@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "status": "PASS_SCIENTIFIC_CONTENT_ARCHIVE_UNVERIFIED",
+  "review_date": "2026-09-14",
+  "experiment_commit": "03c1e6c40dc1f7a14a5077d4132997be91510562",
+  "dataset": "CUB-200-2011",
+  "celeba_used": false,
+  "official_test_images_used": 0,
+  "phase8_protocol_unchanged": true,
+  "reported_outer_archive_sha256": "a21943af76a6422d1fb44c86716377637a919a9bc03c9ab2fb1f0b3013f583b0",
+  "outer_archive_file_present_for_review": false,
+  "outer_archive_sha256_independently_verified": false,
+  "all_internal_scientific_gates_passed": true,
+  "json_files_parsed": 9661,
+  "declared_artifact_hashes_verified": 35,
+  "phase9_images": 76,
+  "phase9_decisions": 417,
+  "phase9_interventions": 7506,
+  "replication_images": 77,
+  "replication_decisions": 834,
+  "replication_target_counts": {
+    "0": 417,
+    "1": 417
+  },
+  "controls": [
+    "image",
+    "prompt_only",
+    "image_shuffled",
+    "opposite_label_image"
+  ],
+  "bootstrap_unit": "image_id",
+  "bootstrap_samples": 10000,
+  "confidence_level": 0.95,
+  "tie_policy": "retain exact zero margins as abstentions and score incorrect",
+  "llava_full_margin_ties": 12,
+  "qwen_full_margin_ties": 2,
+  "supported_findings": [
+    "Vision-CLS-selected top-32 patches have a positive selector-specific causal effect under development-stage mean replacement at vision.late and projector.output.",
+    "Logit-Concept-selected patches are null-compatible at both tested stages under the same intervention.",
+    "Vision-CLS selector-specific effects exceed Logit-Concept effects at both stages.",
+    "Correct CUB images improve teacher-forced correct-answer margin and margin accuracy over prompt-only, shuffled-image, and opposite-label-image controls in both LLaVA and Qwen."
+  ],
+  "suggestive_diagnostics": [
+    "Selector-specific effects are larger on Phase 5 successes than failures.",
+    "Qwen has larger correct-image effects on its raw margin scale, but cross-architecture margin scales are not calibrated."
+  ],
+  "unsupported_claims": [
+    "official-test generalization",
+    "out-of-dataset generalization",
+    "CelebA replication",
+    "free-generation accuracy improvement",
+    "literal information destruction at the projector",
+    "causal importance of Logit-Concept-selected patches",
+    "absence of evidence from a null-compatible interval",
+    "an internal causal route for Qwen"
+  ]
+}

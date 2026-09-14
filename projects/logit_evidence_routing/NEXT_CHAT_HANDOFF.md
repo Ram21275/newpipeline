@@ -2,28 +2,33 @@
 
 Branch: `feat/iclr`. Project: `projects/logit_evidence_routing`.
 
-## Active continuation (supersedes the execution instructions below)
+## Completed CUB-only follow-up (supersedes the execution instructions below)
 
 Continue with CUB-200-2011 only. The attached CelebA package is incomplete, so
 do not search for, prepare, run, analyze, or package CelebA. Use `--celeba no`
 for every compact-runner command.
 
-Compact preparation completed the CUB work before the optional second-dataset
-failure. Retain and preflight these Kaggle outputs without rerunning extraction:
+Compact preparation and all gated CUB LLaVA/Qwen work are complete. The
+scientific contents pass the local audit: Phase 9 has 417 decisions and 7,506
+interventions; each cross-model run has 834 balanced decisions and four controls
+per decision; all source/artifact hashes, counts, image-clustered intervals,
+exact ties, and zero official-test use pass. Read
+`reports/development_20260914/CUB_FOLLOWUP_REVIEW.md` before making claims.
+
+Retain these preparation artifacts without rerunning extraction:
 
 - `/kaggle/working/phase9_selector_metadata/selector_metadata_report.json`
 - `/kaggle/working/phase9_plan.json`
 - `/kaggle/working/cub_replication_manifest.csv`
 
-Then use `notebooks/KAGGLE_FOLLOWUP_COMPACT.ipynb`: preflight, gated LLaVA,
-gated Qwen with guarded LLaVA checkpoint cleanup, and the final audit. The
-LLaVA and Qwen cells install their pinned session dependencies and exercise a
-tiny bitsandbytes NF4 operation before any model stage. The
-audit covers report/source/artifact/archive hashes, counts, four controls,
-image-clustered intervals, conservative exact-margin ties, and zero official-test
-use. Preserve the frozen Phase 8 protocol. Treat attention/localization as
-diagnostic, probes as accessibility evidence, and only controlled interventions
-as causal evidence; null or mixed intervals remain null-compatible.
+Do not rerun the expensive GPU stages. The extracted result contents are
+verified, but the downloaded outer `.tar.gz` was not supplied locally; only the
+directory and sidecar were available. Re-download the final archive to verify
+its reported SHA-256
+`a21943af76a6422d1fb44c86716377637a919a9bc03c9ab2fb1f0b3013f583b0`.
+Preserve the frozen Phase 8 protocol. Treat attention/localization as diagnostic,
+probes as accessibility evidence, and only controlled interventions as causal
+evidence; null intervals remain null-compatible.
 
 ## Current state (supersedes earlier smoke-only handoffs)
 
