@@ -404,33 +404,41 @@ for section in ('selector_specific_contrasts','selector_target_interactions',
 PY
 ```
 
-## Cell 13 - verify the old archive if it still exists, then build a new deterministic archive
+## Cell 13 - verify the old archive, then build a compact deterministic archive
 
-If the original archive and sidecar are both still present, the first block
-closes the historical outer-archive audit.  Regardless, the new archive has a
+The historical result directory and the Phase 10 checkpoint directories contain
+tens of thousands of small resumability files.  They duplicate the already
+verified historical archive and the canonical intervention CSVs, and attempting
+to hash every checkpoint can exhaust a hosted notebook's small-file budget.
+Package the verified historical archive itself and only the canonical Phase 10
+configs, outcome CSVs, and PASS reports.  The new outer archive retains a
 deterministic internal file manifest and a freshly verified SHA-256.
 
 ```bash
 %%bash
 set -euo pipefail
 cd /kaggle/working
-if [ -f logit_evidence_followup_complete.tar.gz ] && \
-   [ -f logit_evidence_followup_complete.sha256 ]; then
-  sha256sum -c logit_evidence_followup_complete.sha256
-else
-  echo 'Historical archive bytes are unavailable; the new deterministic archive will supersede that package.'
-fi
+test -f logit_evidence_followup_complete.tar.gz
+test -f logit_evidence_followup_complete.sha256
+sha256sum -c logit_evidence_followup_complete.sha256
 PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
 python3 "$PROJECT/scripts/build_submission_archive.py" \
   --root /kaggle/working \
-  --include logit_evidence_followup_complete \
+  --include logit_evidence_followup_complete.tar.gz \
+  --include logit_evidence_followup_complete.sha256 \
   --include priority0_results \
   --include phase4_diverse_gallery \
   --include phase10_selector_metadata \
   --include phase10_plan.json \
-  --include phase10_llava_smoke \
-  --include phase10_llava_pilot \
-  --include phase10_llava_full \
+  --include phase10_llava_smoke/evaluation_config.json \
+  --include phase10_llava_smoke/intervention_outcomes.csv \
+  --include phase10_llava_smoke/phase10_extraction_report.json \
+  --include phase10_llava_pilot/evaluation_config.json \
+  --include phase10_llava_pilot/intervention_outcomes.csv \
+  --include phase10_llava_pilot/phase10_extraction_report.json \
+  --include phase10_llava_full/evaluation_config.json \
+  --include phase10_llava_full/intervention_outcomes.csv \
+  --include phase10_llava_full/phase10_extraction_report.json \
   --include phase10_analysis.json \
   --output /kaggle/working/lger_submission_results.tar.gz
 sha256sum -c /kaggle/working/lger_submission_results.tar.gz.sha256
