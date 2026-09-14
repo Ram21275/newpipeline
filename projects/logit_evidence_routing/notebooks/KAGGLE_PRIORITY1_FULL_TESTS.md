@@ -143,6 +143,7 @@ This recomputes only `parsed_answer` and `generation_correct` from retained
 ```bash
 %%bash
 set -euo pipefail
+trap 'echo "FAILED at line $LINENO: $BASH_COMMAND" >&2' ERR
 PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
 FOLLOWUP=/kaggle/working/logit_evidence_followup_complete
 OUT=/kaggle/working/priority0_results
@@ -260,6 +261,7 @@ PY
 ```bash
 %%bash
 set -euo pipefail
+trap 'echo "FAILED at line $LINENO: $BASH_COMMAND" >&2' ERR
 PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
 FOLLOWUP=/kaggle/working/logit_evidence_followup_complete
 python3 "$PROJECT/scripts/run_phase10_priority1.py" plan \
@@ -296,8 +298,7 @@ set -euo pipefail
 PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
 RUN=/kaggle/working/multiphase_development_5b55fde6a51f
 FOLLOWUP=/kaggle/working/logit_evidence_followup_complete
-CUB_MARKER="$(find /kaggle/input -type f -path '*/CUB_200_2011/images.txt' -print -quit)"
-test -n "$CUB_MARKER"; CUB_ROOT="${CUB_MARKER%/images.txt}"
+CUB_ROOT="$(python3 -c 'import json; print(json.load(open("/kaggle/working/priority1_input_paths.json"))["cub_root"])')"
 python3 "$PROJECT/scripts/extract_phase10_llava_interventions.py" \
   --mode smoke --manifest "$FOLLOWUP/cub_replication_manifest.csv" \
   --behavior-decisions "$FOLLOWUP/cub_llava_full/replication_vqa_decisions.csv" \
@@ -324,8 +325,7 @@ set -euo pipefail
 PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
 RUN=/kaggle/working/multiphase_development_5b55fde6a51f
 FOLLOWUP=/kaggle/working/logit_evidence_followup_complete
-CUB_MARKER="$(find /kaggle/input -type f -path '*/CUB_200_2011/images.txt' -print -quit)"
-test -n "$CUB_MARKER"; CUB_ROOT="${CUB_MARKER%/images.txt}"
+CUB_ROOT="$(python3 -c 'import json; print(json.load(open("/kaggle/working/priority1_input_paths.json"))["cub_root"])')"
 python3 "$PROJECT/scripts/extract_phase10_llava_interventions.py" \
   --mode pilot --manifest "$FOLLOWUP/cub_replication_manifest.csv" \
   --behavior-decisions "$FOLLOWUP/cub_llava_full/replication_vqa_decisions.csv" \
@@ -356,8 +356,7 @@ set -euo pipefail
 PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
 RUN=/kaggle/working/multiphase_development_5b55fde6a51f
 FOLLOWUP=/kaggle/working/logit_evidence_followup_complete
-CUB_MARKER="$(find /kaggle/input -type f -path '*/CUB_200_2011/images.txt' -print -quit)"
-test -n "$CUB_MARKER"; CUB_ROOT="${CUB_MARKER%/images.txt}"
+CUB_ROOT="$(python3 -c 'import json; print(json.load(open("/kaggle/working/priority1_input_paths.json"))["cub_root"])')"
 python3 "$PROJECT/scripts/extract_phase10_llava_interventions.py" \
   --mode full --manifest "$FOLLOWUP/cub_replication_manifest.csv" \
   --behavior-decisions "$FOLLOWUP/cub_llava_full/replication_vqa_decisions.csv" \

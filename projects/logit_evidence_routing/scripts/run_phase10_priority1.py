@@ -27,11 +27,20 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def read_csv(path: Path) -> list[dict[str, str]]:
+def read_csv(path: Path) -> list[dict[str, Any]]:
     with path.open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
     if not rows:
         raise RuntimeError(f"input CSV is empty: {path}")
+    # csv.DictReader serializes every field as text.  Phase 7's audited matcher
+    # intentionally requires token indices to be real integers, so normalize at
+    # this file boundary just as the Phase 9 CLI does.
+    for row in rows:
+        if "token_index" in row:
+            try:
+                row["token_index"] = int(row["token_index"])
+            except (TypeError, ValueError) as error:
+                raise RuntimeError(f"token_index must be an integer in {path}") from error
     return rows
 
 

@@ -70,7 +70,17 @@ def build_priority1_plan(
     matching retained outcomes when the source metadata and seed are unchanged.
     """
 
-    copied = [dict(row) for row in token_rows]
+    copied = []
+    for source in token_rows:
+        row = dict(source)
+        raw_token_index = row.get("token_index")
+        require(not isinstance(raw_token_index, bool), "token_index must be an integer")
+        try:
+            row["token_index"] = int(raw_token_index)
+        except (TypeError, ValueError) as error:
+            raise Phase10ValidationError("token_index must be an integer") from error
+        require(row["token_index"] >= 0, "token_index must be nonnegative")
+        copied.append(row)
     require(copied, "selector token metadata is empty")
     methods = tuple(str(value) for value in selector_methods)
     ks = tuple(int(value) for value in dose_k_values)

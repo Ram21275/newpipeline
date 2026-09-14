@@ -88,6 +88,18 @@ class Phase10Tests(unittest.TestCase):
         self.assertTrue(first["phase8_protocol_unchanged"])
         self.assertEqual(first["official_test_images_used"], 0)
 
+    def test_plan_normalizes_csv_serialized_token_indices(self):
+        serialized = [
+            {**row, "token_index": str(row["token_index"])} for row in token_rows()
+        ]
+        result = build_priority1_plan(
+            serialized, selected_stage="vision.late", neighbor_stage="projector.output",
+            stage_order=STAGES, selector_methods=METHODS, balanced_k=2,
+            dose_selector=METHODS[0], dose_k_values=(2, 4), random_seeds=(0, 1),
+            norm_quantiles=2,
+        )
+        self.assertEqual(result, plan())
+
     def test_positive_balanced_component_keeps_original_phase9_identities(self):
         original = build_selector_intervention_plan(
             [row for row in token_rows() if row["target"] == 1],
