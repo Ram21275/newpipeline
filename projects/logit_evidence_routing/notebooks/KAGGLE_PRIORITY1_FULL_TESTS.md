@@ -45,6 +45,7 @@ fi
 PROJECT="$REPO/projects/logit_evidence_routing"
 for file in \
   scripts/repair_replication_generation_fields.py \
+  scripts/prepare_priority1_inputs.py \
   scripts/run_paper_robustness.py \
   scripts/export_phase10_balanced_selector_metadata.py \
   scripts/run_phase10_priority1.py \
@@ -75,19 +76,20 @@ PYTHONPYCACHEPREFIX=/tmp/lger_pycache python3 -m pytest -ra --tb=short
 
 ## Cell 3 - recover and validate every retained input
 
+This replacement uses bounded metadata discovery and never walks through CUB
+images or intervention-record directories. Attached Kaggle datasets are linked
+read-only into the expected `/kaggle/working` paths. If an input is absent, the
+error names the missing retained dataset immediately.
+
 ```bash
 %%bash
 set -euo pipefail
+trap 'echo "FAILED at line $LINENO: $BASH_COMMAND" >&2' ERR
+PROJECT=/kaggle/working/newpipeline/projects/logit_evidence_routing
+python3 "$PROJECT/scripts/prepare_priority1_inputs.py"
 RUN=/kaggle/working/multiphase_development_5b55fde6a51f
 FOLLOWUP=/kaggle/working/logit_evidence_followup_complete
-if [ ! -d "$FOLLOWUP" ]; then
-  ARCHIVE="$(find /kaggle/input -type f -name 'logit_evidence_followup_complete.tar.gz' -print -quit)"
-  test -n "$ARCHIVE"
-  tar -xzf "$ARCHIVE" -C /kaggle/working
-fi
-CUB_MARKER="$(find /kaggle/input -type f -path '*/CUB_200_2011/images.txt' -print -quit)"
-test -n "$CUB_MARKER"
-CUB_ROOT="${CUB_MARKER%/images.txt}"
+CUB_ROOT="$(python3 -c 'import json; print(json.load(open("/kaggle/working/priority1_input_paths.json"))["cub_root"])')"
 python3 - "$RUN" "$FOLLOWUP" "$CUB_ROOT" <<'PY'
 import csv, json, sys
 from pathlib import Path
