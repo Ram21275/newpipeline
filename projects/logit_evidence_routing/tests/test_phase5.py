@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import copy
 import csv
+import importlib.util
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from lger.phase5 import (
     Phase5ValidationError,
@@ -26,6 +28,18 @@ from lger.phase5 import (
 
 
 PROJECT = Path(__file__).resolve().parents[1]
+
+
+def load_extractor():
+    path = PROJECT / "scripts" / "extract_phase5_vqa.py"
+    spec = importlib.util.spec_from_file_location("extract_phase5_vqa", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+EXTRACTOR = load_extractor()
 
 
 def config() -> dict[str, object]:
@@ -146,6 +160,32 @@ class Phase5MathTests(unittest.TestCase):
 
 
 class Phase5ValidationTests(unittest.TestCase):
+    def test_extractor_string_parser_scores_yes_and_no(self) -> None:
+        decision = {
+            "decision_id": "d", "image_id": 1, "split": "val",
+            "attribute_id": 7, "attribute_name": "bill", "attribute_group": "bill",
+            "attribute_phrase": "an all-purpose bill", "prompt_id": "p",
+            "prompt_text": "Does the bird...?", "cohort": "grounded_negative",
+            "target": 0, "certainty_name": "definitely",
+            "relevant_visible_in_crop_parts": 1, "official_split": "train",
+            "shuffled_image_id": 2,
+        }
+        base = {
+            "positive_log_likelihood": -2.0, "negative_log_likelihood": -1.0,
+            "answer_margin": -1.0, "attention_entropy": None,
+            "attention_effective_tokens": None, "attention_scores": None,
+            "positive_token_ids": [1], "negative_token_ids": [2],
+        }
+        negative = EXTRACTOR.output_row(
+            decision, "image", SimpleNamespace(**{**base, "generated_text": "No"})
+        )
+        positive = EXTRACTOR.output_row(
+            {**decision, "target": 1, "cohort": "grounded_positive"}, "image",
+            SimpleNamespace(**{**base, "generated_text": "Yes", "answer_margin": 1.0}),
+        )
+        self.assertEqual((negative["parsed_answer"], negative["generation_correct"]), ("no", 1))
+        self.assertEqual((positive["parsed_answer"], positive["generation_correct"]), ("yes", 1))
+
     def test_complete_precomputed_records_pass_and_keep_cohorts_separate(self) -> None:
         metrics, summaries, deltas, report = validate_phase5_records(measurements(), config())
         self.assertEqual(len(metrics), 12)

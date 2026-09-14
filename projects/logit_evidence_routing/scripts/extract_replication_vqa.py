@@ -143,8 +143,10 @@ def result_row(decision: dict[str, str], control: str, result: Any, adapter: str
         "margin_prediction": prediction,
         "margin_correct": int(not tie and prediction == target),
         "generated_text": result.generated_text or "",
-        "parsed_answer": parsed or "",
-        "generation_correct": int((parsed == "yes") == bool(target)) if parsed is not None else "",
+        # ``strict_parse_binary`` returns a Boolean.  Preserve False rather than
+        # collapsing a valid "no" answer to the empty-string sentinel.
+        "parsed_answer": parsed if parsed is not None else "",
+        "generation_correct": int(parsed == bool(target)) if parsed is not None else "",
         "attention_entropy": result.attention_entropy if result.attention_entropy is not None else "",
         "attention_effective_tokens": (
             result.attention_effective_tokens if result.attention_effective_tokens is not None else ""

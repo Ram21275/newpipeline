@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "purpose": "phase10_development_balanced_target_and_k_dose_extension",
+  "development_only": true,
+  "phase8_protocol_unchanged": true,
+  "official_test_images_used": 0,
+  "selected_stage": "vision.late",
+  "neighbor_stage": "projector.output",
+  "fixed_mask_across_stages": true,
+  "selector_methods": [
+    "vision_cls_attention",
+    "logit_concept"
+  ],
+  "balanced_k": 32,
+  "dose_selector": "vision_cls_attention",
+  "dose_k_values": [
+    8,
+    16,
+    32,
+    64
+  ],
+  "matched_random_seeds": [
+    0,
+    1,
+    2
+  ],
+  "matching_strata": [
+    "target",
+    "bird_box_membership",
+    "hidden_state_norm_quantile"
+  ],
+  "matching_fallback": "within target: norm quantiles 4 then 2 then 1 with exact bird-box strata; if exact spatial support remains impossible, drop only the bird-box stratum and repeat the predeclared norm-bin sequence, recording every fallback",
+  "replacement": "development_train_stage_mean",
+  "primary_outcome": "correct_answer_teacher_forced_margin_drop",
+  "balanced_primary_interaction": "target_1_minus_target_0_of_vision_cls_minus_logit_concept_selector_effect",
+  "dose_primary_trend": "vision_cls_selector_effect_change_per_doubling_of_k",
+  "bootstrap_unit": "image_id",
+  "bootstrap_replicates": 10000,
+  "confidence_level": 0.95,
+  "reuse_policy": "reuse retained Phase 9 rows only when decision and intervention IDs match exactly"
+}

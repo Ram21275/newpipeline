@@ -112,6 +112,8 @@ def analyze_model(
     summaries = []
     for control in CONTROLS:
         rows = [values[control] for values in decisions.values()]
+        parseable = [row["generation_correct"] for row in rows
+                     if row["generation_correct"] is not None]
         summaries.append({
             "model_label": label,
             "control": control,
@@ -121,9 +123,17 @@ def analyze_model(
             "mean_correct_answer_margin": statistics.mean(row["correct_margin"] for row in rows),
             "margin_ties": sum(row["tie"] for row in rows),
             "margin_tie_rate": statistics.mean(row["tie"] for row in rows),
-            "generation_accuracy": (
-                statistics.mean(row["generation_correct"] for row in rows)
-                if all(row["generation_correct"] is not None for row in rows) else None
+            # Strict free-generation accuracy scores unparseable outputs as
+            # incorrect, matching the conservative Phase 5 policy.  Conditional
+            # accuracy and its denominator are retained as diagnostics.
+            "generation_accuracy": statistics.mean(
+                0 if row["generation_correct"] is None else row["generation_correct"]
+                for row in rows
+            ),
+            "generation_parseable_count": len(parseable),
+            "generation_parse_rate": len(parseable) / len(rows),
+            "generation_accuracy_parseable": (
+                statistics.mean(parseable) if parseable else None
             ),
         })
     contrasts = []

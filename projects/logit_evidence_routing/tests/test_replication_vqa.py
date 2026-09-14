@@ -7,6 +7,7 @@ import csv
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -78,6 +79,27 @@ class ReplicationCohortTests(unittest.TestCase):
         self.assertEqual({(int(row["attribute_id"]), int(row["target"])) for row in pilot},
                          {(1, 0), (1, 1), (2, 0), (2, 1)})
 
+    def test_result_row_preserves_boolean_no_and_scores_both_answers(self):
+        base = {
+            "decision_id": "d1", "image_id": "1", "attribute_id": "2",
+            "attribute_name": "has_bill_shape::dagger", "target": "0",
+            "shuffled_image_id": "2", "opposite_label_image_id": "3",
+        }
+        result = SimpleNamespace(
+            positive_log_likelihood=-2.0, negative_log_likelihood=-1.0,
+            answer_margin=-1.0, generated_text="No", attention_entropy=None,
+            attention_effective_tokens=None, positive_token_ids=[1], negative_token_ids=[2],
+        )
+        negative = REPLICATION.result_row(base, "image", result, "llava")
+        self.assertIs(negative["parsed_answer"], False)
+        self.assertEqual(negative["generation_correct"], 1)
+
+        positive_decision = {**base, "target": "1"}
+        positive_result = SimpleNamespace(**{**result.__dict__, "generated_text": "Yes"})
+        positive = REPLICATION.result_row(positive_decision, "image", positive_result, "llava")
+        self.assertIs(positive["parsed_answer"], True)
+        self.assertEqual(positive["generation_correct"], 1)
+
 
 class ReplicationAnalysisTests(unittest.TestCase):
     def write_results(self, root: Path) -> Path:
@@ -119,6 +141,8 @@ class ReplicationAnalysisTests(unittest.TestCase):
         )
         image = next(row for row in result["summaries"] if row["control"] == "image")
         self.assertEqual(image["margin_accuracy"], 1.0)
+        self.assertEqual(image["generation_parse_rate"], 1.0)
+        self.assertEqual(image["generation_accuracy"], 1.0)
         contrast = next(row for row in result["contrasts"]
                         if row["contrast"] == "image_minus_prompt_only"
                         and row["metric"] == "correct_answer_margin")

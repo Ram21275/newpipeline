@@ -11,18 +11,36 @@ from .phase4 import attribute_eligibility
 from .scoring import stable_topk
 
 
-def plot_image(output_dir, record, pixels, cached_scores, dense_scores, policy, part_names):
+def plot_image(
+    output_dir,
+    record,
+    pixels,
+    cached_scores,
+    dense_scores,
+    policy,
+    part_names,
+    *,
+    attribute_id=None,
+    include_object=True,
+):
     image = record['image']
     image_id = image['image_id']
     rgb = pixels.permute(1, 2, 0).numpy()
-    tasks = [('object', None, {**cached_scores, 'dense_object': dense_scores[0]},
-              [tuple(p['model_xy']) for p in image['parts'] if p['visible'] and p['model_xy'] is not None])]
+    tasks = []
+    if include_object:
+        tasks.append(('object', None, {**cached_scores, 'dense_object': dense_scores[0]},
+                      [tuple(p['model_xy']) for p in image['parts']
+                       if p['visible'] and p['model_xy'] is not None]))
     for column, attribute in enumerate(policy['attributes'], 1):
+        if attribute_id is not None and int(attribute['attribute_id']) != int(attribute_id):
+            continue
         reason, points, _ = attribute_eligibility(image, attribute, part_names)
         if reason == 'eligible':
             tasks.append(('attribute', attribute, {**cached_scores, 'dense_object': dense_scores[0],
                                                    'dense_attribute': dense_scores[column]}, points))
             break  # Fixed first eligible attribute by policy order; never select by score.
+    if attribute_id is not None and not tasks:
+        raise ValueError(f'image {image_id} is not eligible for requested attribute {attribute_id}')
     paths = []
     for scope, attribute, scores, points in tasks:
         fig, axes = plt.subplots(2, 3, figsize=(12, 8), squeeze=False)

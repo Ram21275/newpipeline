@@ -443,6 +443,16 @@ review, so the internal contents are verified but the absent outer `.tar.gz`
 could not be hashed independently. Re-download that archive to close the final
 packaging check.
 
+The submission-strengthening continuation is documented in
+[`notebooks/KAGGLE_PRIORITY1_FULL_TESTS.md`](notebooks/KAGGLE_PRIORITY1_FULL_TESTS.md).
+It fixes and reanalyzes Boolean free-generation parsing on CPU, adds
+class/attribute-balanced and simultaneous Phase 9 inference, reports per-image
+influence, renders a performance-independent Phase 4 gallery across all five
+attribute groups, and runs the development-only balanced-target plus
+Vision-CLS K-dose intervention extension. The combined Priority 1 plan contains
+35,028 resumable interventions and reuses retained Phase 9 rows only under exact
+decision/intervention identity matches.
+
 The recommended Kaggle sequence is the importable four-cell
 [`KAGGLE_FOLLOWUP_COMPACT.ipynb`](notebooks/KAGGLE_FOLLOWUP_COMPACT.ipynb),
 also available as a short

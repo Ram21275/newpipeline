@@ -304,7 +304,11 @@ class StageCacheTests(unittest.TestCase):
     def test_shard_write_and_reload_contract_without_external_runtime(self) -> None:
         class FakeSafeOpen:
             def __init__(self, path: Path, **_: object) -> None:
-                self.payload = torch.load(path, map_location="cpu", weights_only=False)
+                # Pass a file object so newer PyTorch versions do not intercept
+                # the synthetic ``.safetensors`` suffix before this fake
+                # compatibility layer can exercise the repository contract.
+                with path.open("rb") as handle:
+                    self.payload = torch.load(handle, map_location="cpu", weights_only=False)
 
             def __enter__(self) -> "FakeSafeOpen":
                 return self
