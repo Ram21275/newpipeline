@@ -1,4 +1,20 @@
-# Current project handoff — 14 September 2026
+# Current project handoff — 16 September 2026
+
+## Training-free allocation continuation — implementation only
+
+Read `planning/20_TRAINING_FREE_ALLOCATION_BRIDGE.md` for the verified two-repository
+audit, mathematical alternatives, prior-art risks, and new development protocol.
+The query-anchored spectral selector and Qwen bridge runner are implemented and
+synthetically tested. **No new CUB model result has been produced.** Start with
+metadata-only preparation and the two-decision Kaggle smoke; do not run the pilot
+unless the matching source/plan smoke passes. Existing locked tables remain intact.
+
+The bridge measures processor-default encoding plus controlled budgets, crop
+controls, cached-token internal interventions, and audited layer readouts. A
+compatible pre-existing Qwen probe is optional and otherwise explicitly N/A;
+H2 remains unresolved without it. Landmark proxies cannot establish a true
+attribute-area cliff, and cumulative token matching is not compute matching.
+Study D remains conditional on these measurements and the matched controls.
 
 Branch: `feat/iclr`. Project: `projects/logit_evidence_routing`.
 

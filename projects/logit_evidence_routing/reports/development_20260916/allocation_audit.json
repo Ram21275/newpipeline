@@ -1,0 +1,54 @@
+{
+  "date": "2026-09-16",
+  "status": "IMPLEMENTED_SYNTHETICALLY_VALIDATED_NOT_GPU_VALIDATED",
+  "local_base_commit": "10e329f103976160a7de33a79e4ff1f41b9ae122",
+  "local_branch": "feat/iclr",
+  "partner_commit": "1096a8642b2de9ba6a649a60a77f5641ba76db42",
+  "remote_heads_verified": true,
+  "partner_file_sha256": {
+    "METHOD.md": "cd7dca29e78f76b73855188223321481c428d011e02b79442b2e951f57eec980",
+    "PAPER_FLOW.md": "5283a63f2471dcc2a701a33fc6386c781cb31341ea0c10b98b6c222ae7624f42",
+    "FINDINGS.md": "c1d32c3006e6a1e37afa6281c41a2487a0f113397beb3ae02b0fb1c9aa79d9db",
+    "scripts/phase70_rerank_head.py": "f5caa605291802c28aee5c849ca090c8cfee1783f4ea7ce468e7a4b590b184d6",
+    "scripts/phase73_layer_structure.py": "47be85f80f69749cdc8fb1f1efd856e8c16640b48f77ad5b90ff5b4e5907b80e",
+    "scripts/phase79_lens_mechanism.py": "4339f45df0b4f3ce307f3fe82d996ac05ff134ed5e595af0ce510b2d16a0b09f"
+  },
+  "locked_artifacts": {
+    "reports/development_20260911/phase4_review_decision.json": {
+      "sha256": "794084cf64101fb829e68cd4b552f8db87a410722e6675daf9f7fa6b9d2cf743",
+      "unchanged_from_audited_commit": true
+    },
+    "reports/confirmatory_20260915/phase10_main_inference.csv": {
+      "sha256": "a4aa34223c55e1171073e776fdb5650e51fbc8fc83bee8e7ef5b104858a40e9b",
+      "unchanged_from_audited_commit": true
+    },
+    "reports/confirmatory_20260915/phase10_confirmatory_analysis.json": {
+      "sha256": "52b4619ca91386febf6608504bbb0999e4e16a6920185371bc5ab92ee770230b",
+      "unchanged_from_audited_commit": true
+    },
+    "reports/confirmatory_20260915/README.md": {
+      "sha256": "062d481768581bcd17c63049c0e6b3f456fb29db42164de5f695c2e901f87fd4",
+      "unchanged_from_audited_commit": true
+    }
+  },
+  "validation": {
+    "targeted_tests_passed": 36,
+    "real_CUB_model_forwards": 0,
+    "official_test_images_opened": 0,
+    "model_or_dataset_downloads": 0,
+    "tests": [
+      "test_depth_allocation.py",
+      "test_hf_qwen.py",
+      "test_qwen_layout.py",
+      "test_multimodal_dola.py"
+    ]
+  },
+  "outstanding": [
+    "Kaggle two-decision architecture/smoke gate",
+    "Development pilot on at most 52 decisions",
+    "Compatible frozen Qwen accessibility instrument to resolve H2",
+    "Validated attribute extent for a true part-token cliff",
+    "Inference-only compute-matched uniform comparison",
+    "Held-out development validation before any positive method claim"
+  ]
+}
