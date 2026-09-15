@@ -1,0 +1,555 @@
+{
+  "attempts": [
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 64,
+      "targets": {
+        "0": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        },
+        "1": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 63,
+      "targets": {
+        "0": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        },
+        "1": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 62,
+      "targets": {
+        "0": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        },
+        "1": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 61,
+      "targets": {
+        "0": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        },
+        "1": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 60,
+      "targets": {
+        "0": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        },
+        "1": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 59,
+      "targets": {
+        "0": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        },
+        "1": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 58,
+      "targets": {
+        "0": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        },
+        "1": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 57,
+      "targets": {
+        "0": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        },
+        "1": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 56,
+      "targets": {
+        "0": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        },
+        "1": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 55,
+      "targets": {
+        "0": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        },
+        "1": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 54,
+      "targets": {
+        "0": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        },
+        "1": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 53,
+      "targets": {
+        "0": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        },
+        "1": {
+          "reason": "selector vision_cls_attention lacks exact matched-random support even after predeclared quantile coarsening",
+          "status": "FAIL"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 52,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 51,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 50,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 49,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 48,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 47,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 46,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 45,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 44,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 43,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 42,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 41,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 1,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 40,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 2,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 2,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 39,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 2,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 2,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 38,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 2,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 2,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 37,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 2,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 2,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": false,
+      "k": 36,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 2,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": false,
+          "matching_norm_quantiles": 2,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    },
+    {
+      "exact_spatial_and_norm_pass": true,
+      "k": 35,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": true,
+          "matching_norm_quantiles": 4,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": true,
+          "matching_norm_quantiles": 4,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    }
+  ],
+  "development_only": true,
+  "largest_feasible_exact_k": 35,
+  "max_k_requested": 64,
+  "min_k_requested": 32,
+  "model_forwards_performed": false,
+  "neighbor_stage": "projector.output",
+  "norm_quantiles_by_target": {
+    "0": 4,
+    "1": 4
+  },
+  "official_test_images_used": 0,
+  "purpose": "largest_exact_spatial_and_norm_matched_k_search",
+  "random_seeds": [
+    0,
+    1,
+    2
+  ],
+  "schema_version": 1,
+  "search_order": "descending exhaustive until first pass",
+  "selected_stage": "vision.late",
+  "selector": "vision_cls_attention",
+  "source_sha256": "5423bfc390bd255d78158b096e350deca2683ab532f5a85e26782a82530eb7ce",
+  "status": "PASS"
+}

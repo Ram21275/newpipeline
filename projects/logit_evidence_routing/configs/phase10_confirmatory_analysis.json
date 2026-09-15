@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "purpose": "phase10_confirmatory_raw_and_correct_margin_analysis",
+  "development_only": true,
+  "official_test_images_used": 0,
+  "outcome_count": 35028,
+  "decision_count": 834,
+  "image_count": 77,
+  "balanced_k": 32,
+  "stages": [
+    "vision.late",
+    "projector.output"
+  ],
+  "selectors": [
+    "vision_cls_attention",
+    "logit_concept"
+  ],
+  "metric_scales": [
+    "raw_yes_minus_no",
+    "correct_answer_margin"
+  ],
+  "raw_margin_definition": "log P(yes) - log P(no)",
+  "correct_margin_definition": "(2y-1) * (log P(yes) - log P(no))",
+  "effect_direction": "selected mask margin drop minus mean matched-random margin drop",
+  "raw_primary_target_test": "target_1_minus_target_0 without a sign transformation",
+  "simultaneous_method": "common-image nonparametric max-t bootstrap",
+  "simultaneous_families": "one 18-estimand family per metric scale",
+  "blocking_units": [
+    "attribute_id",
+    "class_id"
+  ],
+  "blocking_weighting": "equal group after equal-image aggregation within group",
+  "leave_one_out_units": [
+    "attribute_id",
+    "class_id"
+  ],
+  "bootstrap_unit": "image_id",
+  "bootstrap_replicates": 10000,
+  "confidence_level": 0.95,
+  "seed": 20260915,
+  "accuracy_policy": {
+    "teacher_forced_tie_is_correct": false,
+    "generated_unparseable_is_correct": false,
+    "also_report_parse_rate": true,
+    "also_report_accuracy_among_parseable": true
+  },
+  "claim_boundary": "Development-only controlled mean replacement. Raw-margin target tests diagnose semantic affirmative-direction evidence and do not establish distinct positive/negative mechanisms, natural causal use, literal erasure, or official-test generalization."
+}

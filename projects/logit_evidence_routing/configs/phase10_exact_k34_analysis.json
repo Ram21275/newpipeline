@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "purpose": "phase10_confirmatory_raw_and_correct_margin_analysis",
+  "status": "LOCKED_DEVELOPMENT_ANALYSIS",
+  "development_only": true,
+  "official_test_images_used": 0,
+  "balanced_k": 34,
+  "outcome_count": 21684,
+  "decision_count": 834,
+  "image_count": 77,
+  "attribute_count": 26,
+  "species_count": 20,
+  "metric_scales": [
+    "raw_yes_minus_no",
+    "correct_answer_margin"
+  ],
+  "main_stages": [
+    "vision.late",
+    "projector.output"
+  ],
+  "main_estimand_family": [
+    "selector_effect_by_target",
+    "selector_target_difference",
+    "selector_difference_by_target",
+    "selector_difference_target_difference"
+  ],
+  "simultaneous_inference": {
+    "method": "nonparametric image-cluster max-t bootstrap",
+    "family_definition": "all 18 estimands within each metric scale",
+    "separate_families_by_scale": true
+  },
+  "blocked_robustness": [
+    "equal_attribute",
+    "equal_species"
+  ],
+  "leave_one_group_out": [
+    "attribute_id",
+    "class_id"
+  ],
+  "bootstrap_replicates": 10000,
+  "confidence_level": 0.95,
+  "seed": 20260915,
+  "tie_policy": "retain exact zero margins as abstentions and score incorrect",
+  "claim_boundary": "Raw yes-minus-no target comparisons are primary for polarity. Correct-margin target reversal is reported as the signed transformation, not as evidence of separate routing mechanisms."
+}

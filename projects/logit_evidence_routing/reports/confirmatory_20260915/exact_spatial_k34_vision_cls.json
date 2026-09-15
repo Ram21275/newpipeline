@@ -1,0 +1,47 @@
+{
+  "attempts": [
+    {
+      "exact_spatial_and_norm_pass": true,
+      "k": 34,
+      "targets": {
+        "0": {
+          "exact_spatial_and_norm_pass": true,
+          "matching_norm_quantiles": 4,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        },
+        "1": {
+          "exact_spatial_and_norm_pass": true,
+          "matching_norm_quantiles": 4,
+          "requested_norm_quantiles": 4,
+          "spatial_match": "exact_bird_box_membership",
+          "status": "PASS"
+        }
+      }
+    }
+  ],
+  "development_only": true,
+  "largest_feasible_exact_k": 34,
+  "max_k_requested": 34,
+  "min_k_requested": 34,
+  "model_forwards_performed": false,
+  "neighbor_stage": "projector.output",
+  "norm_quantiles_by_target": {
+    "0": 4,
+    "1": 4
+  },
+  "official_test_images_used": 0,
+  "purpose": "largest_exact_spatial_and_norm_matched_k_search",
+  "random_seeds": [
+    0,
+    1,
+    2
+  ],
+  "schema_version": 1,
+  "search_order": "descending exhaustive until first pass",
+  "selected_stage": "vision.late",
+  "selector": "vision_cls_attention",
+  "source_sha256": "5423bfc390bd255d78158b096e350deca2683ab532f5a85e26782a82530eb7ce",
+  "status": "PASS"
+}

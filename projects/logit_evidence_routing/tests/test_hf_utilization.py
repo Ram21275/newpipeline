@@ -16,10 +16,12 @@ class FakeTokenizer:
     all_special_ids: list[int] = []
 
     def encode(self, text: str, add_special_tokens: bool) -> list[int]:
-        return {"yes": [1], "no": [2], "very yes": [3, 1]}[text]
+        return {"yes": [1], "no": [2], "very yes": [3, 1],
+                "true": [4], "false": [5]}[text]
 
     def decode(self, values: list[int], **_: object) -> str:
-        reverse = {(1,): "yes", (2,): "no", (3, 1): "very yes", (7,): "yes"}
+        reverse = {(1,): "yes", (2,): "no", (3, 1): "very yes", (4,): "true",
+                   (5,): "false", (7,): "yes"}
         return reverse.get(tuple(values), "")
 
     def convert_ids_to_tokens(self, values: list[int]) -> list[str]:
@@ -128,6 +130,14 @@ class HfUtilizationTests(unittest.TestCase):
         )
         self.assertEqual(output.positive_token_ids, (3, 1))
         self.assertTrue(torch.isfinite(torch.tensor(output.answer_margin)))
+
+    def test_answer_pair_can_change_without_reloading_model(self) -> None:
+        runner = self.runner()
+        model_identity = id(runner.model)
+        runner.set_answer_pair("true", "false")
+        self.assertEqual(id(runner.model), model_identity)
+        self.assertEqual(runner.positive_token_ids, (4,))
+        self.assertEqual(runner.negative_token_ids, (5,))
 
     def test_normalized_entropy_rejects_negative_scores(self) -> None:
         entropy, effective = normalized_entropy(torch.ones(4))

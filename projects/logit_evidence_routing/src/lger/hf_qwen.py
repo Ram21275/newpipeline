@@ -52,14 +52,6 @@ class HfQwenDecisionRunner:
             raise ValueError("attention_layer_offset must be negative")
         self.model = model.eval()
         self.processor = processor
-        self.positive_answer = positive_answer.strip()
-        self.negative_answer = negative_answer.strip()
-        if not self.positive_answer or not self.negative_answer:
-            raise ValueError("binary answer strings cannot be empty")
-        self.positive_token_ids = self._answer_token_ids(self.positive_answer)
-        self.negative_token_ids = self._answer_token_ids(self.negative_answer)
-        if self.positive_token_ids == self.negative_token_ids:
-            raise ValueError("positive and negative answers tokenize identically")
         self.attention_layer_offset = attention_layer_offset
         self.input_device = _module_device(model)
         config_dtype = getattr(model.config, "torch_dtype", None)
@@ -72,6 +64,7 @@ class HfQwenDecisionRunner:
         self.image_token_id = int(token_id)
         for parameter in self.model.parameters():
             parameter.requires_grad_(False)
+        self.set_answer_pair(positive_answer, negative_answer)
 
     @classmethod
     def from_pretrained(
@@ -142,6 +135,22 @@ class HfQwenDecisionRunner:
         if decoded.strip().casefold() != answer.casefold():
             raise RuntimeError(f"Qwen answer tokenization does not round-trip: {answer!r}")
         return values
+
+    def set_answer_pair(self, positive_answer: str, negative_answer: str) -> None:
+        """Change the scored lexical pair without reloading the frozen model."""
+
+        positive = positive_answer.strip()
+        negative = negative_answer.strip()
+        if not positive or not negative:
+            raise ValueError("binary answer strings cannot be empty")
+        positive_ids = self._answer_token_ids(positive)
+        negative_ids = self._answer_token_ids(negative)
+        if positive_ids == negative_ids:
+            raise ValueError("positive and negative answers tokenize identically")
+        self.positive_answer = positive
+        self.negative_answer = negative
+        self.positive_token_ids = positive_ids
+        self.negative_token_ids = negative_ids
 
     def _prepare(
         self, image: Any | None, prompt_text: str

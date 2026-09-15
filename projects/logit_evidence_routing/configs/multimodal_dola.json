@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "papers": [
+    {
+      "name": "MLLM can see? Dynamic Correction Decoding for Hallucination Mitigation",
+      "method": "DeCo",
+      "arxiv": "2410.11779",
+      "role": "primary multimodal architecture"
+    },
+    {
+      "name": "DoLa: Decoding by Contrasting Layers Improves Factuality in Large Language Models",
+      "method": "DoLa",
+      "arxiv": "2309.03883",
+      "role": "training-free contrastive comparator"
+    }
+  ],
+  "adaptation": "project fused image-and-question language states through the shared final norm and LM head, then compare final scoring with dynamic preceding-layer correction and contrast",
+  "status": "DEVELOPMENT_PROTOCOL",
+  "development_only": true,
+  "official_test_images_used": 0,
+  "base_models_frozen": true,
+  "deco_primary": {
+    "name": "full_vocabulary_multimodal_deco",
+    "candidate_vocabulary": "top-p nucleus from the mature final-layer distribution",
+    "top_p": 0.9,
+    "top_k": 20,
+    "anchor_selection": "candidate layer containing the largest probability assigned to a final-layer candidate token",
+    "alpha": 0.6,
+    "soft_modulation": "maximum full-vocabulary probability at the selected anchor layer",
+    "correction": "mature raw logits plus alpha times soft modulation times anchor raw logits",
+    "reason": "DeCo is the direct multimodal precedent and its default alpha/top-p values are fixed before CUB evaluation"
+  },
+  "deco_binary_sensitivity": {
+    "name": "answer_constrained_multimodal_deco",
+    "candidate_vocabulary": "yes and no only",
+    "purpose": "tests whether the effect is specific to the frozen CUB decision boundary rather than full-vocabulary decoding"
+  },
+  "dola_comparator": {
+    "name": "answer_constrained_multimodal_dola",
+    "layer_selection_distribution": "two-way semantic answer distribution",
+    "contrast": "mature log probability minus dynamically selected premature log probability",
+    "plausibility_constraint": null
+  },
+  "paper_faithful_sensitivity": {
+    "name": "full_vocabulary_multimodal_dola",
+    "layer_selection_distribution": "full vocabulary",
+    "adaptive_plausibility_alpha": 0.1,
+    "masked_logit": -1000.0
+  },
+  "candidate_policy": {
+    "llava": {
+      "model": "llava-hf/llava-1.5-7b-hf",
+      "revision": "b234b804b114d9e37bb655e11cbbb5f5e971b7a9",
+      "mature": "final language layer",
+      "primary_interval_inclusive": [20, 28],
+      "candidate_stride": 1,
+      "reason": "paper-replication interval for a 32-layer 7B decoder; do not tune on CUB test"
+    },
+    "qwen2_5_vl": {
+      "model": "Qwen/Qwen2.5-VL-7B-Instruct",
+      "revision": "cc594898137f460bfe9f0759e9844b3ce807cfb5",
+      "mature": "final language layer",
+      "primary_normalized_depth_interval": [0.625, 0.875],
+      "candidate_stride": 1,
+      "reason": "transfer the LLaVA interval by normalized depth after the mandatory layout gate reports the actual layer count"
+    }
+  },
+  "controls": [
+    "ordinary mature-layer answer margin",
+    "DoLa dynamic contrast on the identical candidate interval",
+    "static best preceding layer selected on development validation",
+    "random candidate layer with fixed seed",
+    "prompt-only layer decoding",
+    "image-shuffled layer decoding"
+  ],
+  "answer_robustness": {
+    "pairs": ["yes/no", "true/false", "present/absent"],
+    "counterbalance_answer_order": true,
+    "primary_scale": "raw semantic positive-minus-negative margin"
+  },
+  "spatial_relation": {
+    "encoder_patch_size_sweep": false,
+    "explanation": "DeCo and DoLa change the fused language-layer readout; fixed-grid token windows, dilation, pooling, and exact-matched selector interventions remain a separate upstream spatial factor",
+    "development_scales": ["top_k", "contiguous_window", "dilated_window", "pooled_grid"]
+  },
+  "stages": [
+    {"name": "architecture", "images": 1, "gate": "candidate and mature states project through the same final norm/head; finite distributions and DeCo coefficients"},
+    {"name": "smoke", "images": 2, "gate": "restart works; anchor layer, contrast layer, and all margins reproduce exactly"},
+    {"name": "pilot", "images": 48, "gate": "non-degenerate anchor choices and positive paired direction on development data"},
+    {"name": "development_full", "images": "all development", "gate": "freeze method, interval, vocabulary pair, and spatial scale"},
+    {"name": "official_test", "images": "frozen official test", "gate": "one evaluation only after every choice is locked"}
+  ],
+  "promotion_gate": {
+    "required": [
+      "paired image-cluster 95 percent interval excludes zero for full-vocabulary DeCo versus ordinary final-layer scoring",
+      "DeCo is compared directly with DoLa on the identical examples and candidate interval",
+      "direction agrees across answer vocabularies and order counterbalancing",
+      "prompt-only and image-shuffled controls do not explain the gain",
+      "leave-one-attribute and leave-one-species conclusions are stable",
+      "dynamic selection outperforms static validation-selected and fixed-seed random-layer controls"
+    ],
+    "if_gate_fails": "report as a negative exploratory result and do not evaluate on the official test"
+  },
+  "claim_boundary": "A gain would show that preceding fused language-layer evidence can improve frozen CUB decision readout. It would not prove that language priors uniquely cause the original errors, that the model naturally performs this correction, or that the effect generalizes beyond CUB."
+}

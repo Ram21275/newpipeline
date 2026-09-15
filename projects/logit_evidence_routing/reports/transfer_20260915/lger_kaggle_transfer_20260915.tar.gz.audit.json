@@ -1,0 +1,11 @@
+{
+  "archive": "/Users/ramdabas/Downloads/newpipeline/projects/logit_evidence_routing/reports/transfer_20260915/lger_kaggle_transfer_20260915.tar.gz",
+  "archive_bytes": 52025,
+  "archive_sha256": "7e77668cf48374fa47251486446f79c35c026b6f30c17749dc370c4ab4be452c",
+  "file_count": 19,
+  "internal_manifest_verified": true,
+  "large_artifacts_included": false,
+  "official_test_images_used": 0,
+  "schema_version": 1,
+  "status": "PASS"
+}

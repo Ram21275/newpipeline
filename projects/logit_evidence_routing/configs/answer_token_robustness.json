@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "purpose": "development_answer_token_and_prompt_order_robustness",
+  "development_only": true,
+  "official_test_images_used": 0,
+  "controls": [
+    "image",
+    "prompt_only",
+    "image_shuffled"
+  ],
+  "conditions": [
+    {
+      "condition_id": "yes_no_positive_first",
+      "vocabulary": "yes_no",
+      "answer_order": "positive_first",
+      "prompt_template": "Does the bird have {attribute_phrase}? Answer only yes or no.",
+      "positive_answer": "yes",
+      "negative_answer": "no"
+    },
+    {
+      "condition_id": "yes_no_negative_first",
+      "vocabulary": "yes_no",
+      "answer_order": "negative_first",
+      "prompt_template": "Does the bird have {attribute_phrase}? Answer only no or yes.",
+      "positive_answer": "yes",
+      "negative_answer": "no"
+    },
+    {
+      "condition_id": "true_false_positive_first",
+      "vocabulary": "true_false",
+      "answer_order": "positive_first",
+      "prompt_template": "It is true that the bird has {attribute_phrase}. Answer only true or false.",
+      "positive_answer": "true",
+      "negative_answer": "false"
+    },
+    {
+      "condition_id": "true_false_negative_first",
+      "vocabulary": "true_false",
+      "answer_order": "negative_first",
+      "prompt_template": "It is true that the bird has {attribute_phrase}. Answer only false or true.",
+      "positive_answer": "true",
+      "negative_answer": "false"
+    },
+    {
+      "condition_id": "present_absent_positive_first",
+      "vocabulary": "present_absent",
+      "answer_order": "positive_first",
+      "prompt_template": "For the bird, is the attribute '{attribute_phrase}' present or absent? Answer only present or absent.",
+      "positive_answer": "present",
+      "negative_answer": "absent"
+    },
+    {
+      "condition_id": "present_absent_negative_first",
+      "vocabulary": "present_absent",
+      "answer_order": "negative_first",
+      "prompt_template": "For the bird, is the attribute '{attribute_phrase}' absent or present? Answer only absent or present.",
+      "positive_answer": "present",
+      "negative_answer": "absent"
+    }
+  ],
+  "run_order": [
+    "smoke",
+    "pilot",
+    "full"
+  ],
+  "pilot_decisions": 48,
+  "max_new_tokens": 3,
+  "primary_metric": "semantic_positive_minus_negative_sequence_log_likelihood",
+  "primary_tests": [
+    "vocabulary_by_visual_condition_interaction",
+    "answer_order_by_visual_condition_interaction",
+    "target_difference_on_the_raw_semantic_margin",
+    "teacher_forced_and_generated_accuracy"
+  ],
+  "intervention_extension": {
+    "status": "pilot_only_until_behavioral_gate_passes",
+    "selection_k": 32,
+    "stages": [
+      "vision.late",
+      "projector.output"
+    ],
+    "selectors": [
+      "vision_cls_attention",
+      "logit_concept"
+    ],
+    "matched_random_replicates": 3,
+    "pilot_decisions": 32
+  },
+  "full_gate": "Run full only after all six smoke conditions round-trip tokenization, the 48-decision pilot completes without parser or OOM failures, runtime extrapolation fits quota, and no config changes remain.",
+  "claim_boundary": "Agreement across vocabularies and prompt orders supports semantic affirmative evidence. Disagreement diagnoses token- or prompt-specific behavior; it does not by itself localize an internal causal mechanism."
+}

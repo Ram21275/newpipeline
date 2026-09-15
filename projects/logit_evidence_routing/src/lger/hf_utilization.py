@@ -74,14 +74,7 @@ class HfLlavaDecisionRunner:
         self.model = base_extractor.model
         self.processor = base_extractor.processor
         self.attention_layer_offset = attention_layer_offset
-        self.positive_answer = positive_answer.strip()
-        self.negative_answer = negative_answer.strip()
-        if not self.positive_answer or not self.negative_answer:
-            raise ValueError("binary answer strings cannot be empty")
-        self.positive_token_ids = self._answer_token_ids(self.positive_answer)
-        self.negative_token_ids = self._answer_token_ids(self.negative_answer)
-        if self.positive_token_ids == self.negative_token_ids:
-            raise ValueError("positive and negative answers tokenize identically")
+        self.set_answer_pair(positive_answer, negative_answer)
 
     @classmethod
     def from_pretrained(
@@ -131,6 +124,22 @@ class HfLlavaDecisionRunner:
                 f"answer tokenization does not round-trip: {answer!r} -> {decoded!r}"
             )
         return token_ids
+
+    def set_answer_pair(self, positive_answer: str, negative_answer: str) -> None:
+        """Change the scored lexical pair without reloading the frozen model."""
+
+        positive = positive_answer.strip()
+        negative = negative_answer.strip()
+        if not positive or not negative:
+            raise ValueError("binary answer strings cannot be empty")
+        positive_ids = self._answer_token_ids(positive)
+        negative_ids = self._answer_token_ids(negative)
+        if positive_ids == negative_ids:
+            raise ValueError("positive and negative answers tokenize identically")
+        self.positive_answer = positive
+        self.negative_answer = negative
+        self.positive_token_ids = positive_ids
+        self.negative_token_ids = negative_ids
 
     def _text_only_prompt(self, prompt_text: str) -> str:
         if getattr(self.processor, "chat_template", None):

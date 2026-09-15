@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "purpose": "staged_qwen_internal_multimodal_replication",
+  "status": "DEVELOPMENT_PROTOCOL",
+  "development_only": true,
+  "official_test_images_used": 0,
+  "model_config": "configs/qwen25vl_7b_replication.json",
+  "measurement_equivalence": {
+    "required": "compare functions rather than numeric layer identities",
+    "llava_to_qwen": {
+      "vision_context": "pre-merger visual transformer states",
+      "projector_boundary": "Qwen visual merger output entering the language sequence",
+      "fused_language_state": "query and visual-token states in intermediate/final language layers",
+      "decision_readout": "semantic yes-minus-no likelihood margin"
+    }
+  },
+  "architecture_gate": {
+    "images": 1,
+    "required_assertions": [
+      "processor image-token count equals THW grid divided by spatial-merge area",
+      "visual output token count equals inserted language image-token count",
+      "language hidden sequence aligns with processed input sequence",
+      "final norm and output head project intermediate query states to finite vocabulary logits"
+    ],
+    "on_failure": "stop; save shapes and module names; do not run hooks or interventions"
+  },
+  "smoke_gate": {
+    "images": 2,
+    "targets": [0, 1],
+    "required": "bitwise-stable resume records, finite margins, non-degenerate candidate-layer JSD"
+  },
+  "pilot_gate": {
+    "decisions": 48,
+    "balance": "attribute and target stratified",
+    "required": "valid layouts for every dynamic token count and positive paired direction before full development extraction"
+  },
+  "full_gate": {
+    "scope": "development validation only",
+    "required": "freeze equivalent stages, candidate bucket, token vocabulary, selector, and spatial scale before any official-test run"
+  },
+  "candidate_layers": {
+    "resolution": "discover language-layer count at architecture gate",
+    "buckets": ["lower half even-indexed", "upper half even-indexed"],
+    "selection_data": "development validation only",
+    "mature": "final fused language layer"
+  },
+  "claim_boundary": "Equivalent measurement concepts do not imply identical layer identities, token grids, merger behavior, or causal mechanisms across LLaVA and Qwen."
+}

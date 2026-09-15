@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "purpose": "selector_specific_attribute_accessibility",
+  "status": "LOCKED_DEVELOPMENT_DESIGN",
+  "development_only": true,
+  "official_test_images_used": 0,
+  "attributes": "the same 26 development-selected CUB attributes",
+  "selectors": [
+    "vision_cls_attention",
+    "logit_concept"
+  ],
+  "stages": [
+    "vision.late",
+    "projector.output"
+  ],
+  "selection_k": 34,
+  "feature_definition": "unweighted mean of the K selected frozen patch states; selector scores are used only for ranking",
+  "comparators": [
+    "all_patch_mean",
+    "three exact bird-box-and-four-bin-norm matched random masks",
+    "bottom_k_same_selector",
+    "label_shuffled_probe"
+  ],
+  "split_policy": {
+    "fit": "existing development-training images only",
+    "thresholds": "training F1 only",
+    "evaluation": "existing development-validation images only",
+    "official_test": "forbidden during selection or tuning"
+  },
+  "probe": {
+    "model": "masked multi-label linear probe",
+    "normalization": "training feature mean and population standard deviation",
+    "seeds": [0, 1, 2],
+    "epochs": 300,
+    "learning_rate": 0.01,
+    "weight_decay": 0.0001,
+    "uncertain_targets": "mask guess, not-visible, and missing labels"
+  },
+  "primary_metric": "macro_attribute_auroc",
+  "secondary_metric": "macro_attribute_f1",
+  "primary_contrast": "Vision-CLS-selected minus Logit-Concept-selected macro attribute AUROC within stage and seed",
+  "uncertainty": "paired image-cluster bootstrap of validation predictions; report three seeds and leave-one-attribute/species-out sensitivity",
+  "promotion_gate": "the selector contrast must agree across seeds and remain after exact matched-random and label-shuffled controls",
+  "claim_boundary": "This experiment tests attribute decodability in selector-restricted pooled states. It does not show that the frozen VLM uses that selector or pooling rule when answering."
+}
