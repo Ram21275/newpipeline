@@ -22,6 +22,16 @@ from .qwen_layout import expected_merged_visual_tokens, qwen_layout_assertions
 FULL = (0.0, 0.0, 1.0, 1.0)
 
 
+def _projected_positions(projected: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
+    """Index a projected sequence on the projection output device.
+
+    Accelerate can place a normalization module on a different device from its
+    input hidden state.  The returned projection, rather than the input state,
+    therefore determines where the index tensor must live.
+    """
+    return projected[0, positions.to(projected.device)]
+
+
 def budget_grid(size: tuple[int, int], budget: int) -> tuple[int, int]:
     """Closest aspect ratio on the merged grid, within 2% of requested tokens."""
     if budget < 4 or min(size) <= 0:
@@ -193,7 +203,7 @@ def measure(runner: Any, inputs: dict, *, capture: bool = False,
                 projected = state if index == len(states)-1 else norm(state)
                 query_logits = logits if index == len(states)-1 else head(projected[:, -1]).float()[0]
                 lens.append(float((query_logits[pos] - query_logits[neg]).cpu()))
-                patch_states = projected[0, positions.to(projected.device)]
+                patch_states = _projected_positions(projected, positions)
                 # Linear vocabulary difference avoids allocating patch x full vocabulary.
                 weight = (head.weight[pos] - head.weight[neg]).to(patch_states.device)
                 bias = 0.0 if head.bias is None else head.bias[pos] - head.bias[neg]
@@ -205,7 +215,8 @@ def measure(runner: Any, inputs: dict, *, capture: bool = False,
                 if len(ids) != 1 or runner.processor.tokenizer.decode(ids).strip().casefold() != word:
                     raise RuntimeError("generic bird concept does not have an audited lexical token")
                 concept_ids.extend(ids)
-            concept_state = norm(states[-2])[0, positions.to(states[-2].device)]
+            concept_projection = norm(states[-2])
+            concept_state = _projected_positions(concept_projection, positions)
             concepts = []
             for chunk in concept_state.split(32):
                 probability = head(chunk).float().softmax(-1)

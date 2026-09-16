@@ -122,6 +122,29 @@ def test_cached_internal_arm_bypasses_encoder_and_restores_on_failure():
     assert torch.equal(cached[0], torch.tensor([1., 2.]))
 
 
+def test_projected_position_indices_follow_projection_output_device():
+    from lger.hf_allocation import _projected_positions
+
+    class Positions:
+        def __init__(self):
+            self.requested_device = None
+
+        def to(self, device):
+            self.requested_device = device
+            return "moved-index"
+
+    class Projection:
+        device = "cuda:1"
+
+        def __getitem__(self, key):
+            assert key == (0, "moved-index")
+            return "selected-states"
+
+    positions = Positions()
+    assert _projected_positions(Projection(), positions) == "selected-states"
+    assert positions.requested_device == "cuda:1"
+
+
 def test_pilot_selection_ignores_outcomes_and_input_order():
     rows = [{"image_id": i, "attribute_id": a, "target": y, "margin": i*y}
             for a in (2, 5) for y in (0, 1) for i in (1, 2, 3)]
