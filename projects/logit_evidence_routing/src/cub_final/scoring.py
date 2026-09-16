@@ -101,14 +101,18 @@ def assert_final_logit_agreement(
 
     if reconstructed_logits.shape != model_logits.shape:
         raise AssertionError("reconstructed and model logits have different shapes")
-    difference = (reconstructed_logits.float() - model_logits.float()).abs()
+    # ``device_map="auto"`` can shard the language-model head and the final
+    # decoder block across different GPUs.  The reconstructed logits then stay
+    # on the head device while Transformers returns ``model.logits`` on another
+    # device.  This is a small validation-only vector, so compare detached fp32
+    # host copies rather than assuming both tensors share a CUDA device.
+    reconstructed = reconstructed_logits.detach().to(device="cpu", dtype=torch.float32)
+    reference = model_logits.detach().to(device="cpu", dtype=torch.float32)
+    difference = (reconstructed - reference).abs()
     maximum = float(difference.max().detach().cpu())
     mean = float(difference.mean().detach().cpu())
-    if not torch.allclose(
-        reconstructed_logits.float(), model_logits.float(), atol=atol, rtol=rtol
-    ):
+    if not torch.allclose(reconstructed, reference, atol=atol, rtol=rtol):
         raise AssertionError(
             f"final logit reconstruction disagrees with model.logits: max_abs={maximum:.6g}"
         )
     return {"max_abs_error": maximum, "mean_abs_error": mean, "atol": atol, "rtol": rtol}
-
