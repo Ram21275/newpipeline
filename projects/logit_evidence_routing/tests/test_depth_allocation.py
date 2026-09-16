@@ -198,7 +198,11 @@ def test_measure_uses_final_logits_and_audits_single_normalization(monkeypatch):
                              negative_token_ids=(1,), processor=SimpleNamespace(tokenizer=Tokenizer()))
     record, aux = measure(runner, {"input_ids": torch.tensor([[9, 9, 1]]),
                                   "image_grid_thw": torch.tensor([[1, 2, 4]])}, capture=True)
-    assert record["final_projection_max_error"] == 0
+    # Full-sequence and single-position GEMMs can round differently across
+    # PyTorch/BLAS builds (Kaggle observed 4.77e-7 in this float32 fixture).
+    # Keep this much tighter than the runtime gate and retain the double-norm
+    # negative control below; numerical parity does not require bitwise equality.
+    assert record["final_projection_max_error"] == pytest.approx(0.0, abs=1e-6)
     assert record["double_norm_max_error"] > 1
     assert record["lens_margin_by_layer"][-1] == record["margin"]
     assert record["visual_tokens"] == 2
