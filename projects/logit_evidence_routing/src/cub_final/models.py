@@ -100,12 +100,20 @@ def _image_token_id(model: Any, processor: Any) -> int:
 class FrozenVlmRunner:
     """Shared candidate-scoring and layer-readout implementation."""
 
-    def __init__(self, model: Any, processor: Any, *, architecture: str) -> None:
+    def __init__(
+        self,
+        model: Any,
+        processor: Any,
+        *,
+        architecture: str,
+        runtime: RuntimeChoice | None = None,
+    ) -> None:
         import torch
 
         self.model = model.eval()
         self.processor = processor
         self.architecture = architecture
+        self.runtime = runtime
         self.input_device = _module_device(model)
         self.image_token_id = _image_token_id(model, processor)
         self.final_norm, self.lm_head = _resolve_lm_components(model)
@@ -117,6 +125,12 @@ class FrozenVlmRunner:
     @property
     def resolved_revision(self) -> str:
         return str(getattr(self.model.config, "_commit_hash", None) or "unknown")
+
+    @property
+    def final_state_requires_norm(self) -> bool:
+        """Whether this Transformers architecture exposes a pre-norm final capture."""
+
+        return self.architecture == "qwen3"
 
     def architecture_audit(self) -> dict[str, Any]:
         config = self.model.config
@@ -132,7 +146,28 @@ class FrozenVlmRunner:
             "deepstack_visual_indexes": getattr(config, "deepstack_visual_indexes", None),
             "vision_feature_layers": getattr(config, "vision_feature_layer", None),
             "vision_feature_select_strategy": getattr(config, "vision_feature_select_strategy", None),
+            "final_hidden_projection": (
+                "final_norm_then_lm_head" if self.final_state_requires_norm else "lm_head"
+            ),
+            "runtime": (
+                {
+                    "dtype": self.runtime.dtype_name,
+                    "quantization": self.runtime.quantization,
+                    "device_map": self.runtime.device_map,
+                }
+                if self.runtime is not None
+                else None
+            ),
         }
+
+    def _project_state(self, state: Any, *, apply_final_norm: bool) -> Any:
+        """Project one hidden state across an explicitly sharded norm/head boundary."""
+
+        if apply_final_norm:
+            state = state.to(_module_device(self.final_norm))
+            state = self.final_norm(state)
+        state = state.to(_module_device(self.lm_head))
+        return self.lm_head(state)
 
     def _render(self, prompt: str, *, has_image: bool) -> str:
         if self.architecture == "qwen3":
@@ -299,23 +334,34 @@ class FrozenVlmRunner:
                 result["decoder_attention_scores"] = None
                 result["attention_failure"] = "checkpoint/runtime did not return eager attentions"
         if capture_layers:
-            hidden = outputs.hidden_states
+            hidden = getattr(outputs, "hidden_states", None)
+            if not hidden:
+                raise RuntimeError("checkpoint/runtime did not return hidden states")
             projected: list[list[float]] = []
-            # Intermediate states need final norm; the last state is validated
-            # against model.logits and is never normalised twice.
+            # All intermediate decoder states need the final norm. Transformers
+            # 4.57.1 exposes Qwen3-VL's captured last decoder-layer output before
+            # its separate text-model norm, whereas LLaVA exposes the normalized
+            # final state. Validate the architecture-specific reconstruction
+            # against model.logits so a library semantic change fails closed.
             for state in hidden[:-1]:
                 selected = state[0, int(meta["query_position"])]
-                logits = self.lm_head(self.final_norm(selected.to(next(self.lm_head.parameters()).device)))
+                logits = self._project_state(selected, apply_final_norm=True)
                 projected.append([float(logits[positive_ids[0]].detach().cpu()), float(logits[negative_ids[0]].detach().cpu())])
-            last = hidden[-1][0, int(meta["query_position"])].to(next(self.lm_head.parameters()).device)
-            direct = self.lm_head(last)
+            last = hidden[-1][0, int(meta["query_position"])]
+            final_projection = (
+                "final_norm_then_lm_head" if self.final_state_requires_norm else "lm_head"
+            )
+            reconstructed = self._project_state(
+                last, apply_final_norm=self.final_state_requires_norm
+            )
             dtype_tolerance = 5e-2 if mature.dtype == torch.float16 else 2e-2
             agreement = assert_final_logit_agreement(
-                direct, mature, atol=dtype_tolerance, rtol=dtype_tolerance
+                reconstructed, mature, atol=dtype_tolerance, rtol=dtype_tolerance
             )
             projected.append([float(mature[positive_ids[0]].detach().cpu()), float(mature[negative_ids[0]].detach().cpu())])
             result["answer_first_token_layer_logits"] = projected
             result["final_logit_agreement"] = agreement
+            result["final_hidden_projection"] = final_projection
             result["logit_lens_scope"] = "first_answer_token; full candidates scored separately"
         if generate:
             with torch.inference_mode():
@@ -346,7 +392,7 @@ def load_runner(
     load_kwargs: dict[str, Any] = {
         "device_map": runtime.device_map,
         "low_cpu_mem_usage": True,
-        "torch_dtype": dtype,
+        "dtype": dtype,
         "attn_implementation": "eager",
     }
     if quantization == "4bit":
@@ -380,7 +426,7 @@ def load_runner(
         )
     else:
         raise ValueError("architecture must be llava or qwen3")
-    runner = FrozenVlmRunner(model, processor, architecture=architecture)
+    runner = FrozenVlmRunner(model, processor, architecture=architecture, runtime=runtime)
     expected = revision if local_snapshot is None else None
     if expected is not None and runner.resolved_revision not in {expected, "unknown"}:
         raise RuntimeError(
@@ -397,4 +443,3 @@ def unload_runner(runner: FrozenVlmRunner) -> None:
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-

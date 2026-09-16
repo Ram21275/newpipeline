@@ -13,7 +13,7 @@ from PIL import Image
 
 from lger.cub import load_cub_part_locations
 
-from .core import ShardWriter, canonical_hash, read_jsonl
+from .core import ShardWriter, canonical_hash, file_sha256, read_jsonl
 from .dola import restricted_binary_dola
 from .geometry import padded_union_crop
 from .models import FrozenVlmRunner, load_runner, unload_runner
@@ -41,6 +41,23 @@ PARTS_BY_ATTRIBUTE_GROUP = {
     "has_tail_color": (14,),
     "has_leg_color": (8, 12),
 }
+
+
+def _implementation_hash() -> str:
+    """Invalidate resumable shards when measurement semantics change."""
+
+    root = Path(__file__).resolve().parent
+    names = ("shared.py", "models.py", "scoring.py", "selectors.py", "dola.py", "geometry.py")
+    return canonical_hash({name: file_sha256(root / name) for name in names})
+
+
+def _finished_condition(writer: ShardWriter, key: str, condition: str) -> bool:
+    value = writer.read(key)
+    if value is None:
+        return False
+    return value.get("status") == "complete" or (
+        condition == "oracle_part_crop" and value.get("status") == "excluded"
+    )
 
 
 def _stable_seed(seed: int, text: str) -> int:
@@ -120,6 +137,7 @@ def run_shared_experiment(
         "protocol_hash": protocol["protocol_hash"],
         "question_manifest_hash": canonical_hash(questions),
         "quantization": quantization,
+        "implementation_hash": _implementation_hash(),
     }
     writer = ShardWriter(output_dir / architecture / "shared_shards", config_hash=canonical_hash(config))
     records_by_id = {
@@ -151,7 +169,12 @@ def run_shared_experiment(
             ]
             if architecture == "qwen3":
                 expected.append("full_double_pixel_budget")
-            if all(writer.completed(f"{question_id}::{condition}") for condition in expected):
+            if all(
+                _finished_condition(
+                    writer, f"{question_id}::{condition}", condition
+                )
+                for condition in expected
+            ):
                 continue
             image = Image.open(cub_root / "images" / records_by_id[int(question["image_id"])]).convert("RGB")
             full_key = f"{question_id}::full"
@@ -172,8 +195,7 @@ def run_shared_experiment(
                 reason = {"reason": "decoder attention/grid unavailable", "question": question}
                 for failed_condition in ("predicted_crop", "predicted_crop_dola"):
                     failed_key = f"{question_id}::{failed_condition}"
-                    if not writer.completed(failed_key):
-                        writer.write(failed_key, reason, status="failed")
+                    writer.write(failed_key, reason, status="failed")
                 predicted_box = None
             else:
                 selected = max(range(len(scores)), key=lambda index: (float(scores[index]), -index))
@@ -216,7 +238,7 @@ def run_shared_experiment(
                     ordinary_by_condition[condition] = dict(cached["payload"])
                     continue
                 if box is None:
-                    if not writer.completed(key):
+                    if not _finished_condition(writer, key, condition):
                         writer.write(
                             key,
                             {"reason": "no visible part for attribute-group oracle", "question": question},
@@ -237,7 +259,7 @@ def run_shared_experiment(
                     crop_box=box,
                 )
                 ordinary_by_condition[condition] = record
-                if not writer.completed(key):
+                if not _finished_condition(writer, key, condition):
                     writer.write(key, record)
 
             layer_count = len(full["answer_first_token_layer_logits"])
@@ -258,7 +280,7 @@ def run_shared_experiment(
                     candidate_layers=candidates,
                     alpha=alpha,
                 )
-                if not writer.completed(key):
+                if not _finished_condition(writer, key, dola_condition):
                     writer.write(key, record)
 
             if architecture == "qwen3":
@@ -271,29 +293,52 @@ def run_shared_experiment(
                 )
                 condition = "full_double_pixel_budget"
                 key = f"{question_id}::{condition}"
-                evaluated = runner.evaluate(
-                    enlarged, str(question["prompt"]), capture_layers=False, capture_attention=False
-                )
-                record = _record(
-                    question,
-                    architecture=architecture,
-                    condition=condition,
-                    result=evaluated,
-                    crop_box=None,
-                )
-                record["compute_bar_scope"] = "pixel-area doubled; realized tokens and wall time are authoritative"
-                if not writer.completed(key):
+                if not _finished_condition(writer, key, condition):
+                    evaluated = runner.evaluate(
+                        enlarged,
+                        str(question["prompt"]),
+                        capture_layers=False,
+                        capture_attention=False,
+                    )
+                    record = _record(
+                        question,
+                        architecture=architecture,
+                        condition=condition,
+                        result=evaluated,
+                        crop_box=None,
+                    )
+                    record["compute_bar_scope"] = (
+                        "pixel-area doubled; realized tokens and wall time are authoritative"
+                    )
                     writer.write(key, record)
             completed += 1
     finally:
         unload_runner(runner)
     consolidated = output_dir / architecture / "shared_per_example_shards.jsonl"
     shard_count = writer.consolidate(consolidated)
+    consolidated_rows = read_jsonl(consolidated)
+    condition_count = 7 if architecture == "qwen3" else 6
+    expected_shards = len(questions) * condition_count
+    if shard_count != expected_shards:
+        raise RuntimeError(
+            f"{architecture} shared run has {shard_count}/{expected_shards} terminal shards"
+        )
+    failures = [row for row in consolidated_rows if row.get("status") == "failed"]
+    if failures:
+        sample_keys = [str(row.get("key")) for row in failures[:5]]
+        raise RuntimeError(
+            f"{architecture} shared run has {len(failures)} failed required shards; "
+            f"examples={sample_keys}"
+        )
+    excluded_count = sum(row.get("status") == "excluded" for row in consolidated_rows)
     return {
         "status": "COMPLETE",
         "architecture": architecture,
         "questions_processed_this_invocation": completed,
         "terminal_shard_count": shard_count,
+        "expected_terminal_shard_count": expected_shards,
+        "excluded_shard_count": excluded_count,
+        "failed_shard_count": 0,
         "consolidated": str(consolidated),
         "config_hash": canonical_hash(config),
     }

@@ -17,7 +17,14 @@ from .data import (
     discover_under_kaggle,
 )
 from .figures import render_final_figures
-from .models import load_runner, unload_runner
+from .models import (
+    LLAVA_CHECKPOINT,
+    LLAVA_REVISION,
+    QWEN3_CHECKPOINT,
+    QWEN3_REVISION,
+    load_runner,
+    unload_runner,
+)
 from .protocol import lock_protocol
 from .shared import run_shared_experiment
 
@@ -99,9 +106,16 @@ def command_smoke(args: argparse.Namespace) -> None:
     )
     try:
         result = runner.evaluate(image, prompt, generate=True)
+        checkpoint, revision = {
+            "llava": (LLAVA_CHECKPOINT, LLAVA_REVISION),
+            "qwen3": (QWEN3_CHECKPOINT, QWEN3_REVISION),
+        }[args.architecture]
         value = {
             "status": "PASS",
             "official_test_images_used": 0,
+            "checkpoint": checkpoint,
+            "required_revision": revision,
+            "requested_quantization": args.quantization,
             "architecture_audit": runner.architecture_audit(),
             "training_decision": identity,
             "measurement": result,
