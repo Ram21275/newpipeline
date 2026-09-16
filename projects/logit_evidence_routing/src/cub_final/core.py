@@ -173,7 +173,13 @@ def environment_inventory() -> dict[str, Any]:
     except ImportError:
         inventory["torch"] = None
         inventory["cuda_available"] = False
-    for package in ("transformers", "accelerate", "bitsandbytes", "safetensors"):
+    for package in (
+        "transformers",
+        "accelerate",
+        "bitsandbytes",
+        "huggingface_hub",
+        "safetensors",
+    ):
         try:
             module = __import__(package)
             inventory[package] = getattr(module, "__version__", "unknown")

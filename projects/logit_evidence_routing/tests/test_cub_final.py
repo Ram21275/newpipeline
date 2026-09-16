@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from cub_final.controls import norm_matched_random
-from cub_final.core import ShardWriter, canonical_hash, read_jsonl
+from cub_final.core import ShardWriter, canonical_hash, environment_inventory, read_jsonl
 from cub_final.dola import restricted_binary_dola
 from cub_final.models import LLAVA_CHECKPOINT, LLAVA_REVISION, QWEN3_CHECKPOINT, QWEN3_REVISION
 from cub_final.protocol import lock_protocol, validate_smoke_report
@@ -46,6 +46,9 @@ class CubFinalTests(unittest.TestCase):
         negative = polarity_effects(baseline_margin=1.0, intervention_margin=0.5, target=0)
         self.assertEqual(positive["delta_raw"], negative["delta_raw"])
         self.assertEqual(positive["delta_correct"], -negative["delta_correct"])
+
+    def test_environment_inventory_includes_huggingface_hub(self):
+        self.assertIn("huggingface_hub", environment_inventory())
 
     def test_fixed_parser_keeps_invalid_answers(self):
         self.assertEqual(fixed_binary_parser("Yes, it is.", positive="yes", negative="no"), "positive")
