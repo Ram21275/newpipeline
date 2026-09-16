@@ -19,6 +19,7 @@ class CubFinalNotebookTests(unittest.TestCase):
                 compile("".join(cell["source"]), f"{path.name}:cell-{index}", "exec")
         self.assertIn("run_stage('post_install_versions'", code)
         self.assertIn("importlib.metadata.version(distribution)", code)
+        self.assertIn("CUB_FINAL_VERSION_JSON=", code)
         self.assertIn("version_probe_payload['hf_hub_cache']", code)
         self.assertNotIn("from huggingface_hub.constants import HF_HUB_CACHE\nmodel_revisions", code)
         self.assertNotIn(
