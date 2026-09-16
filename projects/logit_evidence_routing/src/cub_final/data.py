@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from lger.cub import (
+    count_known_attribute_extra_zero_rows,
     discover_cub_root,
     load_cub_attributes,
     load_cub_bounding_boxes,
@@ -72,6 +73,7 @@ def audit_cub(cub_root: Path, *, verify_all_images: bool = True) -> dict[str, An
     certainties = load_cub_certainties(cub_root)
     labels = load_cub_image_attribute_labels(cub_root)
     part_names = _read_names(cub_root / "parts" / "parts.txt")
+    normalized_extra_zero_rows = count_known_attribute_extra_zero_rows(cub_root)
 
     image_ids = {record.image_id for record in records}
     failures: list[str] = []
@@ -112,6 +114,7 @@ def audit_cub(cub_root: Path, *, verify_all_images: bool = True) -> dict[str, An
         "bounding_box_count": len(boxes),
         "part_row_count": sum(len(values) for values in parts.values()),
         "attribute_label_row_count": sum(len(values) for values in labels.values()),
+        "known_six_column_attribute_rows_normalized": normalized_extra_zero_rows,
         "certainty_names": [value.name for value in certainties],
         "historical_class_ids_recovered": list(HISTORICAL_CLASS_IDS),
         "historical_attribute_ids_recovered": list(HISTORICAL_ATTRIBUTE_IDS),
@@ -280,4 +283,3 @@ def build_manifests(
 
 def discover_under_kaggle(search_root: Path = Path("/kaggle/input")) -> Path:
     return discover_cub_root(search_root)
-

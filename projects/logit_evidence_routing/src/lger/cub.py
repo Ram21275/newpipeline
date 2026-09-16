@@ -17,6 +17,12 @@ REQUIRED_CUB_FILES = (
 
 PRIMARY_TARGET_CERTAINTY_NAMES = frozenset({"probably", "definitely"})
 
+# The released CUB-200-2011 annotation file contains an extra zero field before
+# worker time for attributes 10--312 of exactly these two images (303 rows per
+# image, 606 rows total).  Preserve a narrowly scoped compatibility rule rather
+# than accepting arbitrary six-column data as valid.
+KNOWN_ATTRIBUTE_EXTRA_ZERO_IMAGE_IDS = frozenset({2275, 9364})
+
 
 @dataclass(frozen=True)
 class CubRecord:
@@ -302,6 +308,13 @@ def load_cub_image_attribute_labels(
                     ) from error
                 if candidate_image_id not in requested:
                     continue
+            if (
+                len(parts) == 6
+                and int(parts[0]) in KNOWN_ATTRIBUTE_EXTRA_ZERO_IMAGE_IDS
+                and 10 <= int(parts[1]) <= 312
+                and parts[4] == "0"
+            ):
+                parts = [*parts[:4], parts[5]]
             if len(parts) != 5:
                 raise ValueError(f"Malformed attribute label at {path}:{line_number}")
             image_id, attribute_id = int(parts[0]), int(parts[1])
@@ -343,6 +356,24 @@ def load_cub_image_attribute_labels(
     for rows in labels.values():
         rows.sort(key=lambda item: item.attribute_id)
     return labels
+
+
+def count_known_attribute_extra_zero_rows(cub_root: Path) -> int:
+    """Count the documented six-column rows in the released CUB annotation."""
+
+    path = cub_root.expanduser().resolve() / "attributes" / "image_attribute_labels.txt"
+    count = 0
+    with path.open(encoding="utf-8") as handle:
+        for raw_line in handle:
+            parts = raw_line.split()
+            if (
+                len(parts) == 6
+                and int(parts[0]) in KNOWN_ATTRIBUTE_EXTRA_ZERO_IMAGE_IDS
+                and 10 <= int(parts[1]) <= 312
+                and parts[4] == "0"
+            ):
+                count += 1
+    return count
 
 
 def materialize_attribute_targets(

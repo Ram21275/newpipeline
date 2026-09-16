@@ -183,6 +183,24 @@ class CubTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Malformed attribute label"):
                 load_cub_image_attribute_labels(root)
 
+    def test_released_cub_extra_zero_rows_are_narrowly_normalized(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = self.build_cub(Path(temporary))
+            labels_path = root / "attributes" / "image_attribute_labels.txt"
+            with labels_path.open("a", encoding="utf-8") as handle:
+                handle.write("2275 10 0 1 0 1.509\n")
+            # Add the referenced official attribute to this tiny fixture.
+            with (root / "attributes" / "attributes.txt").open(
+                "a", encoding="utf-8"
+            ) as handle:
+                for attribute_id in range(3, 11):
+                    handle.write(f"{attribute_id} has_fixture::value_{attribute_id}\n")
+
+            labels = load_cub_image_attribute_labels(root, image_ids={2275})
+            self.assertEqual(len(labels[2275]), 1)
+            self.assertEqual(labels[2275][0].attribute_id, 10)
+            self.assertEqual(labels[2275][0].worker_time_seconds, 1.509)
+
     def test_attribute_subset_uses_only_requested_training_images(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = self.build_cub(Path(temporary))
