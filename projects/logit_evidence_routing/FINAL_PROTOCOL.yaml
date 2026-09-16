@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "status": "TEMPLATE_NOT_LOCKED",
+  "reason": "The final protocol is created automatically under /kaggle/working/cub_final only after both real-model training-only smoke checks pass.",
+  "lock_command": "python -m cub_final lock --manifest-dir /kaggle/working/cub_final/manifests --smoke-dir /kaggle/working/cub_final/smoke --output /kaggle/working/cub_final/FINAL_PROTOCOL.yaml",
+  "official_test_images_used_locally": 0
+}
+

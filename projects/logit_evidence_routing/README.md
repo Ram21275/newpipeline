@@ -19,6 +19,19 @@ The study separates:
 - direct semantic readability;
 - causal use by the final answer.
 
+## Locked CUB final workflow
+
+The fresh-session final workflow is in
+[`notebooks/CUB_Final_Kaggle.ipynb`](notebooks/CUB_Final_Kaggle.ipynb), with
+reusable code in `src/cub_final/` and exact setup/resume instructions in
+[`KAGGLE_SETUP.md`](KAGGLE_SETUP.md). It keeps the historical development
+pipeline intact while adding full annotation checks, recovered 20-species / 26-
+attribute manifests, training-only smoke gates, an automatic protocol lock,
+LLaVA and Qwen3 adapters, raw-versus-correctness polarity analysis, paired
+image-cluster bootstrap inference, shared crop/DoLa arms, and deterministic
+portable archives. No new official-test GPU result is claimed until the
+notebook's locked stages have completed.
+
 For the deadline-oriented continuation after the reviewed Phase 4 development
 run, use `notebooks/multiphase_development_kaggle.ipynb`. It overlaps corrected
 Phase 3R probes on CPU with Phase 5 VQA on GPU, then runs the gated Phase 6/7

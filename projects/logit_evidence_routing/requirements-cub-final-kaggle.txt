@@ -1,0 +1,9 @@
+# Install this project separately with ``pip install --no-deps -e /path/to/project``.
+# Do not reinstall Kaggle's PyTorch/CUDA stack.
+transformers==4.57.1
+accelerate==1.11.0
+bitsandbytes==0.48.1
+safetensors==0.6.2
+scikit-learn==1.7.2
+matplotlib==3.10.6
+PyYAML==6.0.2
